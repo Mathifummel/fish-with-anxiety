@@ -21,7 +21,7 @@ public partial class NPCFish : CharacterBody2D
 	[Export] public float ApproachOffsetStrength = 100f;
 	[Export] public float CollisionRadius = 40f;
 
-	public Node2D Player; // ✅ assigned from Main
+	public Node2D Player; // assigned from Main
 
 	private Sprite2D fishSprite;
 	private float swimTime = 0f;
@@ -61,7 +61,7 @@ public partial class NPCFish : CharacterBody2D
 
 				if (dist < SeparationRadius && dist > 0)
 				{
-					float safeDist = Mathf.Max(dist, 10f); // ✅ FIX
+					float safeDist = Mathf.Max(dist, 10f);
 					separation += (Position - other.Position).Normalized() / safeDist;
 				}
 			}
