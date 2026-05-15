@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://cw7gk8xx787ui"]
+
+[ext_resource type="Script" uid="uid://dr5jta7x8gooj" path="res://Scripts/PassiveFish.cs" id="1_avgra"]
+[ext_resource type="Texture2D" uid="uid://ctsgtnu78dswp" path="res://Assets/Download.jpeg" id="2_8efic"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_8efic"]
+radius = 22.0
+
+[node name="PassiveFish" type="CharacterBody2D" unique_id=2129683721]
+script = ExtResource("1_avgra")
+Speed = 62.0
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1957811647]
+scale = Vector2(0.24, 0.24)
+texture = ExtResource("2_8efic")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1061431657]
+shape = SubResource("CircleShape2D_8efic")

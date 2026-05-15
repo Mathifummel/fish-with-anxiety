@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://b3kybybh17bm4"]
+
+[ext_resource type="Texture2D" uid="uid://b1kjm72s74n8q" path="res://Assets/seetang.png" id="1_0mase"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0mase"]
+size = Vector2(44, 118)
+
+[node name="Koralle" type="StaticBody2D" unique_id=1693168621]
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=516211566]
+scale = Vector2(0.46, 0.46)
+texture = ExtResource("1_0mase")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=875867387]
+shape = SubResource("RectangleShape2D_0mase")

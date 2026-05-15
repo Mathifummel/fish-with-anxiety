@@ -1,0 +1,47 @@
+[gd_scene format=3 uid="uid://bcdywbssea33u"]
+
+[ext_resource type="Script" uid="uid://dqjie0q1lqa51" path="res://Scripts/NameInput.cs" id="1_36w88"]
+
+[node name="NameInput" type="Control" unique_id=1920737386]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_36w88")
+
+[node name="LineEdit" type="LineEdit" parent="." unique_id=1264456099]
+layout_mode = 0
+offset_left = 549.0
+offset_top = 178.0
+offset_right = 617.5
+offset_bottom = 209.0
+
+[node name="Button" type="Button" parent="." unique_id=1587087022]
+layout_mode = 0
+offset_left = 517.0
+offset_top = 264.0
+offset_right = 619.0
+offset_bottom = 291.0
+text = "Bestätigen"
+
+[node name="Label" type="Label" parent="." unique_id=786911421]
+layout_mode = 1
+anchors_preset = -1
+anchor_bottom = 3.0000002
+offset_left = 526.0
+offset_top = 131.0
+offset_right = 648.0
+offset_bottom = 34.999992
+text = "Name eingeben"
+
+[node name="ScoreLabel" type="Label" parent="." unique_id=288521087]
+layout_mode = 1
+anchors_preset = -1
+anchor_bottom = 3.0000002
+offset_left = 523.0
+offset_top = 105.0
+offset_right = 645.0
+offset_bottom = 8.999992
+text = "Name eingeben"
+
+[connection signal="pressed" from="Button" to="." method="OnButtonPressed"]

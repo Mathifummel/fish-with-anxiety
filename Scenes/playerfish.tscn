@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://d3nxti7twfqq7"]
+
+[ext_resource type="Script" uid="uid://bjr2bdi1oivhe" path="res://Scripts/PlayerFish.cs" id="1_g8buk"]
+[ext_resource type="Texture2D" uid="uid://ctsgtnu78dswp" path="res://Assets/Download.jpeg" id="1_up0m4"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_2qh8w"]
+radius = 32.0
+
+[node name="PlayerFish" type="CharacterBody2D" unique_id=229174405]
+script = ExtResource("1_g8buk")
+Speed = 230.0
+CollisionRadius = 32.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1665302236]
+shape = SubResource("CircleShape2D_2qh8w")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1274975305]
+scale = Vector2(0.32, 0.32)
+texture = ExtResource("1_up0m4")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=975769724]
+position_smoothing_enabled = true
+position_smoothing_speed = 6.0
