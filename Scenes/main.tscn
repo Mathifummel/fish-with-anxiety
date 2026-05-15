@@ -29,7 +29,7 @@ ObstacleScene = ExtResource("5_344ge")
 
 [node name="NPCContainer" type="Node2D" parent="." unique_id=1649477768]
 
-[node name="PassiveFishContainer" type="Node2D" parent="."]
+[node name="PassiveFishContainer" type="Node2D" parent="." unique_id=954775697]
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=1210839962]
 
