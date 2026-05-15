@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://gs6ux1kxikji"]
 
 [ext_resource type="Script" uid="uid://cettdmxla5o63" path="res://Scripts/NPCFish.cs" id="1_xbqoh"]
-[ext_resource type="Texture2D" uid="uid://ba55yaym4h5w5" path="res://Assets/Download (1).jpeg" id="2_bsjmq"]
+[ext_resource type="Texture2D" uid="uid://crjvfmoivitw4" path="res://Assets/EnemyCharacter.png" id="2_xbqoh"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_yyo3l"]
 radius = 27.0
@@ -13,7 +13,7 @@ CollisionRadius = 27.0
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1515495536]
 scale = Vector2(0.32, 0.32)
-texture = ExtResource("2_bsjmq")
+texture = ExtResource("2_xbqoh")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1409514512]
 shape = SubResource("CircleShape2D_yyo3l")
