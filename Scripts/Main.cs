@@ -32,6 +32,12 @@ public partial class Main : Node2D
 	[Export] public float ContactRadius = 55f;
 	[Export] public float ContactStressBonus = 220f;
 
+	[Export] public float PassiveDangerRadius = 240f;
+	[Export] public float PassiveContactRadius = 36f;
+	[Export] public float PassiveStressWeight = 0.32f;
+	[Export] public float StressTargetPerThreat = 58f;
+	[Export] public float ContactStressTargetBonus = 28f;
+
 	[Export] public float ActivationThreshold = 0.25f;
 
 	// COUNTDOWN
@@ -186,7 +192,7 @@ public partial class Main : Node2D
 	{
 		NPCFish npc = NPCFishScene.Instantiate<NPCFish>();
 
-		npc.Position = GetSafeSpawnPosition();
+		npc.Position = GetSafeSpawnPosition(true);
 		npc.Player = Player;
 		npc.SetPhysicsProcess(gameStarted);
 
@@ -233,13 +239,13 @@ public partial class Main : Node2D
 		ObstacleContainer.AddChild(obstacle);
 	}
 
-	private Vector2 GetSafeSpawnPosition()
+	private Vector2 GetSafeSpawnPosition(bool preferChaseAngle = false)
 	{
 		Vector2 fallback = Player.Position + Vector2.Right * MinSpawnDistance;
 
 		for (int i = 0; i < MaxSpawnAttempts; i++)
 		{
-			float angle = (float)GD.RandRange(0f, Mathf.Tau);
+			float angle = GetSpawnAngle(preferChaseAngle, i);
 			float distance = (float)GD.RandRange(MinSpawnDistance, MaxSpawnDistance);
 			Vector2 candidate = Player.Position + Vector2.FromAngle(angle) * distance;
 
@@ -250,6 +256,22 @@ public partial class Main : Node2D
 		}
 
 		return fallback;
+	}
+
+	private float GetSpawnAngle(bool preferChaseAngle, int attempt)
+	{
+		if (!preferChaseAngle || Player.Velocity.Length() < 20f || attempt % 4 == 0)
+			return (float)GD.RandRange(0f, Mathf.Tau);
+
+		float playerMoveAngle = Player.Velocity.Angle();
+
+		if (attempt % 4 == 1)
+		{
+			float side = GD.Randf() < 0.5f ? -1f : 1f;
+			return playerMoveAngle + side * Mathf.Pi * 0.5f + (float)GD.RandRange(-0.55f, 0.55f);
+		}
+
+		return playerMoveAngle + Mathf.Pi + (float)GD.RandRange(-1.15f, 1.15f);
 	}
 
 	private bool IsSpawnPositionSafe(Vector2 candidate)
@@ -371,6 +393,26 @@ public partial class Main : Node2D
 	// STRESS SYSTEM
 	// =====================================
 
+	private float CalculateProximityPressure(float realDist, float radius)
+	{
+		float t = 1f - (realDist / radius);
+
+		if (t <= ActivationThreshold)
+			return 0f;
+
+		t = (t - ActivationThreshold) / (1f - ActivationThreshold);
+		return t * t * (3f - 2f * t);
+	}
+
+	private float CalculateContactPressure(float realDist, float radius)
+	{
+		if (realDist >= radius)
+			return 0f;
+
+		float t = 1f - (realDist / radius);
+		return Mathf.Clamp(t, 0f, 1f);
+	}
+
 	public override void _PhysicsProcess(double delta)
 	{
 		if (!gameStarted)
@@ -378,9 +420,8 @@ public partial class Main : Node2D
 
 		float dt = (float)delta;
 
-		float totalStress = 0f;
-		int nearbyCount = 0;
-		int touchingCount = 0;
+		float threatPressure = 0f;
+		float contactPressure = 0f;
 
 		foreach (Node node in NPCContainer.GetChildren())
 		{
@@ -391,53 +432,40 @@ public partial class Main : Node2D
 				float realDist =
 					dist - (Player.CollisionRadius + npc.CollisionRadius);
 
-				float t = 1f - (realDist / DangerRadius);
+				threatPressure += CalculateProximityPressure(realDist, DangerRadius);
+				contactPressure += CalculateContactPressure(realDist, ContactRadius);
+			}
+		}
 
-				if (t > 0f)
-				{
-					if (t < ActivationThreshold)
-						t = 0f;
-					else
-						t = (t - ActivationThreshold) /
-							(1f - ActivationThreshold);
+		foreach (Node node in PassiveFishContainer.GetChildren())
+		{
+			if (node is PassiveFish fish)
+			{
+				float dist = Player.Position.DistanceTo(fish.Position);
 
-					t = t * t * (3f - 2f * t);
+				float realDist =
+					dist - (Player.CollisionRadius + fish.CollisionRadius);
 
-					totalStress += t;
-					nearbyCount++;
-				}
+				threatPressure +=
+					CalculateProximityPressure(realDist, PassiveDangerRadius) *
+					PassiveStressWeight;
 
-				if (realDist < ContactRadius)
-				{
-					touchingCount++;
-				}
+				contactPressure +=
+					CalculateContactPressure(realDist, PassiveContactRadius) *
+					PassiveStressWeight;
 			}
 		}
 
 		float stressMultiplier = Player.IsBoosting ? 0.5f : 1f;
+		float targetStress = Mathf.Clamp(
+			(threatPressure * StressTargetPerThreat * stressMultiplier) +
+			(contactPressure * ContactStressTargetBonus),
+			0f,
+			100f
+		);
 
-		if (nearbyCount > 0)
-		{
-			Stress += totalStress *
-				StressGain *
-				stressMultiplier *
-				dt;
-		}
-		else
-		{
-			Stress -= StressDecayFar * dt;
-		}
-
-		if (touchingCount > 0)
-		{
-			Stress += touchingCount *
-				ContactStressBonus *
-				dt;
-		}
-		else if (nearbyCount > 0)
-		{
-			Stress -= StressDecayMid * dt;
-		}
+		float stressSpeed = targetStress > Stress ? StressGain : StressDecayFar;
+		Stress = Mathf.MoveToward(Stress, targetStress, stressSpeed * dt);
 
 		if (Player.IsBoosting)
 		{
