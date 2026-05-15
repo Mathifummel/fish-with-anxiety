@@ -23,7 +23,7 @@ public partial class MainMenu : Control
 	// 🏆 LEADERBOARD
 	private void OnLeaderboardPressed()
 	{
-		GetTree().ChangeSceneToFile("res://Scenes/Leaderboard.tscn");
+		GetTree().ChangeSceneToFile("res://Scenes/leaderboard.tscn");
 	}
 	
 	// QUIT BUTTON
