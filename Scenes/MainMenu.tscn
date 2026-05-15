@@ -13,60 +13,56 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_tt5f1")
 
-[node name="StartButton" type="Button" parent="." unique_id=758862737]
-layout_mode = 0
-offset_left = 540.0
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1544823366]
+
+[node name="StartButton" type="Button" parent="CanvasLayer" unique_id=758862737]
+offset_left = 542.0
 offset_top = 232.0
-offset_right = 605.0
+offset_right = 607.0
 offset_bottom = 263.0
 text = "Spielen
 "
 
-[node name="SettingsButton" type="Button" parent="." unique_id=1028093489]
-layout_mode = 0
-offset_left = 514.0
+[node name="SettingsButton" type="Button" parent="CanvasLayer" unique_id=1028093489]
+offset_left = 516.0
 offset_top = 274.0
-offset_right = 627.0
+offset_right = 629.0
 offset_bottom = 305.0
 text = "Einstellungen"
 
-[node name="ExitButton" type="Button" parent="." unique_id=1502548346]
-layout_mode = 0
-offset_left = 534.0
+[node name="ExitButton" type="Button" parent="CanvasLayer" unique_id=1502548346]
+offset_left = 536.0
 offset_top = 390.0
-offset_right = 611.0
+offset_right = 613.0
 offset_bottom = 421.0
 text = "Beenden
 "
 
-[node name="CreditsButton" type="Button" parent="." unique_id=1576860885]
-layout_mode = 0
-offset_left = 541.0
+[node name="CreditsButton" type="Button" parent="CanvasLayer" unique_id=1576860885]
+offset_left = 543.0
 offset_top = 352.0
-offset_right = 604.0
+offset_right = 606.0
 offset_bottom = 383.0
 text = "Credits
 "
 
-[node name="LeaderboardButton" type="Button" parent="." unique_id=891780190]
-layout_mode = 0
-offset_left = 521.0
+[node name="LeaderboardButton" type="Button" parent="CanvasLayer" unique_id=891780190]
+offset_left = 523.0
 offset_top = 314.0
-offset_right = 629.0
+offset_right = 631.0
 offset_bottom = 345.0
 text = "Leaderboard
 "
 
-[node name="Label" type="Label" parent="." unique_id=1562240964]
-layout_mode = 0
-offset_left = 494.0
+[node name="Label" type="Label" parent="CanvasLayer" unique_id=1562240964]
+offset_left = 496.0
 offset_top = 130.0
-offset_right = 701.0
+offset_right = 703.0
 offset_bottom = 206.0
 text = "FISH with ANXIETY"
 
-[connection signal="pressed" from="StartButton" to="." method="_on_button_pressed"]
-[connection signal="pressed" from="SettingsButton" to="." method="_on_settings_button_pressed"]
-[connection signal="pressed" from="ExitButton" to="." method="_on_exit_button_pressed"]
-[connection signal="pressed" from="CreditsButton" to="." method="_on_credits_button_pressed"]
-[connection signal="pressed" from="LeaderboardButton" to="." method="OnLeaderboardPressed"]
+[connection signal="pressed" from="CanvasLayer/StartButton" to="." method="_on_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/SettingsButton" to="." method="_on_settings_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/ExitButton" to="." method="_on_exit_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/CreditsButton" to="." method="_on_credits_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/LeaderboardButton" to="." method="OnLeaderboardPressed"]
