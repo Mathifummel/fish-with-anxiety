@@ -62,25 +62,48 @@ public partial class Main : Node2D
 	[Export] public int TargetCoinCount = 18;
 	[Export] public int TargetObstacleCount = 10;
 
+	[Export] public float DirectionalEnemySpawnDistance = 980f;
+	[Export] public float DirectionalEnemySpawnSpread = 380f;
+	[Export] public float CrossingFishChance = 0.28f;
+	[Export] public float SwarmSpawnDistance = 760f;
+	[Export] public float SwarmSpacing = 76f;
+	[Export] public float SwarmSpawnDelay = 2.1f;
+
 	private ProgressBar StressBar;
 	private Label ScoreLabel;
+	private Label CoinLabel;
 	private Label CountdownLabel;
+	private Label LevelNoticeLabel;
 
 	private float Stress = 0f;
 	private float countdownTimer = 0f;
 	private bool gameStarted = false;
 	private float spawnCheckTimer = 0f;
 	private Vector2 lastStreamPosition = Vector2.Zero;
+	private int currentLevel = 1;
+	private float levelNoticeTimer = 0f;
+	private float npcSpeedMultiplier = 1f;
+	private float passiveSpeedMultiplier = 1f;
+	private int pendingSwarmCount = 0;
+	private float pendingSwarmTimer = 0f;
+	private VideoStreamPlayer backgroundVideo;
+	private float backgroundTime = 0f;
+	private Vector2 backgroundScroll = Vector2.Zero;
+	private Vector2 backgroundScrollVelocity = Vector2.Zero;
+	private bool gameOverTriggered = false;
 
 	private StyleBoxFlat stressFillStyle;
 	private StyleBoxFlat stressBackgroundStyle;
 
 	public override void _Ready()
 	{
+		CreateBackgroundLayer();
+
 		StressBar = GetNode<ProgressBar>("UI/StressBar");
 		ScoreLabel = GetNode<Label>("UI/ScoreLabel");
 		SetupUi();
 		CreateCountdownLabel();
+		CreateLevelNoticeLabel();
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 		sm.Reset();
@@ -104,6 +127,107 @@ public partial class Main : Node2D
 		// COINS
 		for (int i = 0; i < InitialCoinCount; i++)
 			SpawnCoin();
+	}
+
+	public override void _Process(double delta)
+	{
+		float dt = (float)delta;
+		backgroundTime += dt;
+		AnimateBackground(dt);
+
+		if (!gameStarted)
+		{
+			countdownTimer -= dt;
+			int number = Mathf.CeilToInt(countdownTimer);
+
+			CountdownLabel.Text = number > 0 ? number.ToString() : "GO!";
+			ScoreLabel.Text = "Score: 0";
+			CoinLabel.Text = "Muenzen: 0";
+
+			if (countdownTimer <= 0f)
+				StartGame();
+
+			return;
+		}
+
+		var sm = GetNode<ScoreManager>("/root/ScoreManager");
+
+		ScoreLabel.Text = $"Score: {sm.CurrentScore}";
+		CoinLabel.Text = $"Muenzen: {sm.CoinsThisRun}";
+		UpdateDifficulty(sm.CurrentScore);
+		UpdatePendingSwarm(dt);
+		UpdateLevelNotice(dt);
+		UpdateWorldStreaming(dt);
+	}
+
+	private void CreateBackgroundLayer()
+	{
+		CanvasLayer backgroundLayer = new CanvasLayer();
+		backgroundLayer.Layer = -20;
+		AddChild(backgroundLayer);
+
+		backgroundVideo = new VideoStreamPlayer();
+		backgroundVideo.Stream = ResourceLoader.Load<VideoStream>("res://Assets/underwater.ogv");
+		backgroundVideo.SpeedScale = 2.57f;
+		backgroundVideo.Autoplay = true;
+		backgroundVideo.Expand = true;
+		backgroundVideo.Loop = true;
+		backgroundVideo.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		backgroundVideo.PivotOffset = GetViewportRect().Size * 0.5f;
+		backgroundLayer.AddChild(backgroundVideo);
+
+		ColorRect overlay = new ColorRect();
+		overlay.Color = new Color(0.01f, 0.06f, 0.09f, 0.18f);
+		overlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		backgroundLayer.AddChild(overlay);
+	}
+
+	private void AnimateBackground(float dt)
+	{
+		if (backgroundVideo == null)
+			return;
+
+		Vector2 playerVelocity = Player != null ? Player.Velocity : Vector2.Zero;
+		float speed = playerVelocity.Length();
+		float playerBaseSpeed = Player != null ? Player.Speed : 200f;
+		float speedFactor = Mathf.Clamp(speed / Mathf.Max(playerBaseSpeed, 1f), 0f, 2.3f);
+		Vector2 desiredScrollVelocity = Vector2.Zero;
+
+		if (speed > 8f)
+		{
+			float parallaxStrength = Player.IsBoosting ? 0.105f : 0.062f;
+			desiredScrollVelocity = -playerVelocity * parallaxStrength;
+		}
+
+		backgroundScrollVelocity = backgroundScrollVelocity.Lerp(
+			desiredScrollVelocity,
+			Mathf.Clamp(dt * 3.2f, 0f, 1f)
+		);
+
+		backgroundScroll += backgroundScrollVelocity * dt;
+		backgroundScroll.X = WrapAroundCenter(backgroundScroll.X, 92f);
+		backgroundScroll.Y = WrapAroundCenter(backgroundScroll.Y, 68f);
+
+		float driftX = Mathf.Sin(backgroundTime * 0.12f) * 18f;
+		float driftY = Mathf.Cos(backgroundTime * 0.1f) * 12f;
+		float zoom = 1.085f + speedFactor * 0.018f + Mathf.Sin(backgroundTime * 0.07f) * 0.012f;
+
+		backgroundVideo.OffsetLeft = -64f + driftX + backgroundScroll.X;
+		backgroundVideo.OffsetTop = -48f + driftY + backgroundScroll.Y;
+		backgroundVideo.OffsetRight = 64f + driftX + backgroundScroll.X;
+		backgroundVideo.OffsetBottom = 48f + driftY + backgroundScroll.Y;
+		backgroundVideo.Scale = new Vector2(zoom, zoom);
+	}
+
+	private float WrapAroundCenter(float value, float limit)
+	{
+		if (value > limit)
+			return -limit;
+
+		if (value < -limit)
+			return limit;
+
+		return value;
 	}
 
 	private void SetupUi()
@@ -141,7 +265,7 @@ public partial class Main : Node2D
 		StressBar.AddThemeStyleboxOverride("fill", stressFillStyle);
 
 		ScoreLabel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
-		ScoreLabel.OffsetLeft = -210;
+		ScoreLabel.OffsetLeft = -230;
 		ScoreLabel.OffsetTop = 18;
 		ScoreLabel.OffsetRight = -24;
 		ScoreLabel.OffsetBottom = 48;
@@ -151,6 +275,20 @@ public partial class Main : Node2D
 		ScoreLabel.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.65f));
 		ScoreLabel.AddThemeConstantOverride("shadow_offset_x", 2);
 		ScoreLabel.AddThemeConstantOverride("shadow_offset_y", 2);
+
+		CoinLabel = new Label();
+		CoinLabel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+		CoinLabel.OffsetLeft = -230;
+		CoinLabel.OffsetTop = 48;
+		CoinLabel.OffsetRight = -24;
+		CoinLabel.OffsetBottom = 78;
+		CoinLabel.HorizontalAlignment = HorizontalAlignment.Right;
+		CoinLabel.AddThemeFontSizeOverride("font_size", 20);
+		CoinLabel.AddThemeColorOverride("font_color", new Color(0.98f, 0.9f, 0.34f));
+		CoinLabel.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.65f));
+		CoinLabel.AddThemeConstantOverride("shadow_offset_x", 2);
+		CoinLabel.AddThemeConstantOverride("shadow_offset_y", 2);
+		GetNode<CanvasLayer>("UI").AddChild(CoinLabel);
 	}
 
 	private void CreateCountdownLabel()
@@ -166,6 +304,26 @@ public partial class Main : Node2D
 		CountdownLabel.AddThemeConstantOverride("shadow_offset_y", 4);
 
 		GetNode<CanvasLayer>("UI").AddChild(CountdownLabel);
+	}
+
+	private void CreateLevelNoticeLabel()
+	{
+		LevelNoticeLabel = new Label();
+		LevelNoticeLabel.SetAnchorsPreset(Control.LayoutPreset.TopWide);
+		LevelNoticeLabel.OffsetLeft = 240;
+		LevelNoticeLabel.OffsetTop = 72;
+		LevelNoticeLabel.OffsetRight = -240;
+		LevelNoticeLabel.OffsetBottom = 126;
+		LevelNoticeLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		LevelNoticeLabel.VerticalAlignment = VerticalAlignment.Center;
+		LevelNoticeLabel.AddThemeFontSizeOverride("font_size", 30);
+		LevelNoticeLabel.AddThemeColorOverride("font_color", new Color(0.94f, 1f, 0.98f));
+		LevelNoticeLabel.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.72f));
+		LevelNoticeLabel.AddThemeConstantOverride("shadow_offset_x", 3);
+		LevelNoticeLabel.AddThemeConstantOverride("shadow_offset_y", 3);
+		LevelNoticeLabel.Hide();
+
+		GetNode<CanvasLayer>("UI").AddChild(LevelNoticeLabel);
 	}
 
 	private void StartGame()
@@ -190,10 +348,42 @@ public partial class Main : Node2D
 
 	void SpawnNPC()
 	{
+		if (gameStarted && currentLevel >= 2 && GD.Randf() < CrossingFishChance)
+		{
+			SpawnCrossingNPC();
+			return;
+		}
+
 		NPCFish npc = NPCFishScene.Instantiate<NPCFish>();
 
-		npc.Position = GetSafeSpawnPosition(true);
+		npc.Position = GetDirectionalEnemySpawnPosition();
 		npc.Player = Player;
+		npc.Speed *= npcSpeedMultiplier * GetNewEnemySpeedBoost();
+		npc.SetPhysicsProcess(gameStarted);
+
+		NPCContainer.AddChild(npc);
+	}
+
+	private void SpawnCrossingNPC()
+	{
+		NPCFish npc = NPCFishScene.Instantiate<NPCFish>();
+		Vector2 forward = GetPlayerMoveDirection();
+		Vector2 side = new Vector2(-forward.Y, forward.X);
+		float sideSign = GD.Randf() < 0.5f ? -1f : 1f;
+		Vector2 laneCenter =
+			Player.Position +
+			forward * (float)GD.RandRange(260f, 540f);
+
+		npc.Position =
+			laneCenter +
+			side * sideSign * (float)GD.RandRange(680f, 920f);
+
+		npc.Player = Player;
+		npc.Mode = NPCFish.MovementMode.Crossing;
+		npc.CrossingDirection =
+			(-side * sideSign + forward * (float)GD.RandRange(-0.15f, 0.35f)).Normalized();
+		npc.CrossingLifetime = (float)GD.RandRange(4.2f, 6.2f);
+		npc.Speed *= npcSpeedMultiplier * (1.75f + currentLevel * 0.12f);
 		npc.SetPhysicsProcess(gameStarted);
 
 		NPCContainer.AddChild(npc);
@@ -208,6 +398,7 @@ public partial class Main : Node2D
 		PassiveFish fish = PassiveFishScene.Instantiate<PassiveFish>();
 
 		fish.Position = GetSafeSpawnPosition();
+		fish.Speed *= passiveSpeedMultiplier;
 		fish.SetPhysicsProcess(gameStarted);
 
 		PassiveFishContainer.AddChild(fish);
@@ -256,6 +447,60 @@ public partial class Main : Node2D
 		}
 
 		return fallback;
+	}
+
+	private Vector2 GetDirectionalEnemySpawnPosition()
+	{
+		if (!gameStarted || Player.Velocity.Length() < 20f)
+			return GetSafeSpawnPosition(true);
+
+		Vector2 forward = GetPlayerMoveDirection();
+		Vector2 side = new Vector2(-forward.Y, forward.X);
+		Vector2 fallback =
+			Player.Position +
+			forward * DirectionalEnemySpawnDistance;
+
+		for (int i = 0; i < MaxSpawnAttempts; i++)
+		{
+			float distance = (float)GD.RandRange(
+				MinSpawnDistance * 0.86f,
+				DirectionalEnemySpawnDistance + 240f
+			);
+			float spread = (float)GD.RandRange(
+				-DirectionalEnemySpawnSpread,
+				DirectionalEnemySpawnSpread
+			);
+			Vector2 candidate =
+				Player.Position +
+				forward * distance +
+				side * spread;
+
+			if (IsSpawnPositionSafe(candidate))
+				return candidate;
+
+			fallback = candidate;
+		}
+
+		return fallback;
+	}
+
+	private Vector2 GetPlayerMoveDirection()
+	{
+		if (Player.Velocity.Length() > 20f)
+			return Player.Velocity.Normalized();
+
+		return Vector2.Right;
+	}
+
+	private float GetNewEnemySpeedBoost()
+	{
+		if (currentLevel >= 3)
+			return 1.2f;
+
+		if (currentLevel >= 2)
+			return 1.12f;
+
+		return 1f;
 	}
 
 	private float GetSpawnAngle(bool preferChaseAngle, int attempt)
@@ -367,26 +612,134 @@ public partial class Main : Node2D
 	// SCORE UI
 	// =====================================
 
-	public override void _Process(double delta)
+	private void UpdateDifficulty(int score)
 	{
-		if (!gameStarted)
+		if (currentLevel < 2 && score >= 2000)
+			SetDifficultyLevel(2);
+
+		if (currentLevel < 3 && score >= 4500)
+			SetDifficultyLevel(3);
+	}
+
+	private void SetDifficultyLevel(int level)
+	{
+		currentLevel = level;
+
+		if (level == 2)
 		{
-			countdownTimer -= (float)delta;
-			int number = Mathf.CeilToInt(countdownTimer);
+			TargetNPCCount += 3;
+			TargetPassiveFishCount += 3;
+			TargetObstacleCount += 2;
+			SpawnCheckInterval = Mathf.Max(0.22f, SpawnCheckInterval - 0.08f);
+			ApplySpeedMultiplier(1.18f, 1.1f);
+			ScheduleLevelSwarm(3);
+			ShowLevelNotice("LvL 2 erreicht");
+		}
+		else if (level == 3)
+		{
+			TargetNPCCount += 5;
+			TargetPassiveFishCount += 4;
+			TargetObstacleCount += 3;
+			SpawnCheckInterval = Mathf.Max(0.18f, SpawnCheckInterval - 0.06f);
+			ApplySpeedMultiplier(1.38f, 1.22f);
+			ScheduleLevelSwarm(5);
+			ShowLevelNotice("LvL 3 erreicht");
+		}
+	}
 
-			CountdownLabel.Text = number > 0 ? number.ToString() : "GO!";
-			ScoreLabel.Text = "Score: 0";
+	private void ScheduleLevelSwarm(int count)
+	{
+		pendingSwarmCount = count;
+		pendingSwarmTimer = SwarmSpawnDelay;
+	}
 
-			if (countdownTimer <= 0f)
-				StartGame();
+	private void UpdatePendingSwarm(float dt)
+	{
+		if (pendingSwarmCount <= 0)
+			return;
 
+		pendingSwarmTimer -= dt;
+
+		if (pendingSwarmTimer > 0f)
+			return;
+
+		SpawnLevelSwarm(pendingSwarmCount);
+		pendingSwarmCount = 0;
+	}
+
+	private void SpawnLevelSwarm(int count)
+	{
+		Vector2 forward = GetPlayerMoveDirection();
+		Vector2 side = new Vector2(-forward.Y, forward.X);
+		float sideSign = GD.Randf() < 0.5f ? -1f : 1f;
+		Vector2 center =
+			Player.Position +
+			forward * SwarmSpawnDistance +
+			side * sideSign * 320f;
+
+		for (int i = 0; i < count; i++)
+		{
+			NPCFish npc = NPCFishScene.Instantiate<NPCFish>();
+			float row = i - (count - 1) * 0.5f;
+			Vector2 offset =
+				side * row * SwarmSpacing +
+				forward * (float)GD.RandRange(-48f, 48f);
+
+			npc.Position = center + offset;
+			npc.Player = Player;
+			npc.Speed *= npcSpeedMultiplier * 1.18f;
+			npc.ApproachOffsetStrength *= 1.35f;
+			npc.SeparationRadius *= 0.82f;
+			npc.SetPhysicsProcess(gameStarted);
+
+			NPCContainer.AddChild(npc);
+		}
+	}
+
+	private void ApplySpeedMultiplier(float newNpcMultiplier, float newPassiveMultiplier)
+	{
+		float npcRatio = newNpcMultiplier / npcSpeedMultiplier;
+		float passiveRatio = newPassiveMultiplier / passiveSpeedMultiplier;
+
+		npcSpeedMultiplier = newNpcMultiplier;
+		passiveSpeedMultiplier = newPassiveMultiplier;
+
+		foreach (Node node in NPCContainer.GetChildren())
+		{
+			if (node is NPCFish npc)
+				npc.Speed *= npcRatio;
+		}
+
+		foreach (Node node in PassiveFishContainer.GetChildren())
+		{
+			if (node is PassiveFish fish)
+				fish.Speed *= passiveRatio;
+		}
+	}
+
+	private void ShowLevelNotice(string text)
+	{
+		LevelNoticeLabel.Text = text;
+		LevelNoticeLabel.Modulate = new Color(1f, 1f, 1f, 1f);
+		LevelNoticeLabel.Show();
+		levelNoticeTimer = 2.6f;
+	}
+
+	private void UpdateLevelNotice(float dt)
+	{
+		if (levelNoticeTimer <= 0f)
+			return;
+
+		levelNoticeTimer -= dt;
+
+		if (levelNoticeTimer <= 0f)
+		{
+			LevelNoticeLabel.Hide();
 			return;
 		}
 
-		var sm = GetNode<ScoreManager>("/root/ScoreManager");
-
-		ScoreLabel.Text = $"Score: {sm.CurrentScore}";
-		UpdateWorldStreaming((float)delta);
+		float alpha = Mathf.Clamp(levelNoticeTimer, 0f, 1f);
+		LevelNoticeLabel.Modulate = new Color(1f, 1f, 1f, alpha);
 	}
 
 	// =====================================
@@ -432,6 +785,12 @@ public partial class Main : Node2D
 				float realDist =
 					dist - (Player.CollisionRadius + npc.CollisionRadius);
 
+				if (realDist <= 0f)
+				{
+					GameOver();
+					return;
+				}
+
 				threatPressure += CalculateProximityPressure(realDist, DangerRadius);
 				contactPressure += CalculateContactPressure(realDist, ContactRadius);
 			}
@@ -445,6 +804,12 @@ public partial class Main : Node2D
 
 				float realDist =
 					dist - (Player.CollisionRadius + fish.CollisionRadius);
+
+				if (realDist <= 0f)
+				{
+					GameOver();
+					return;
+				}
 
 				threatPressure +=
 					CalculateProximityPressure(realDist, PassiveDangerRadius) *
@@ -481,12 +846,7 @@ public partial class Main : Node2D
 		// GAME OVER
 		if (Stress >= 100f)
 		{
-			GetNode<ScoreManager>("/root/ScoreManager").StopScoring();
-
-			GetTree().ChangeSceneToFile(
-				"res://Scenes/NameInput.tscn"
-			);
-
+			GameOver();
 			return;
 		}
 
@@ -506,5 +866,29 @@ public partial class Main : Node2D
 			stressFillStyle.BgColor =
 				new Color(1f, 0.34f, 0.31f);
 		}
+	}
+
+	private void GameOver()
+	{
+		if (gameOverTriggered)
+			return;
+
+		gameOverTriggered = true;
+		gameStarted = false;
+		GetNode<ScoreManager>("/root/ScoreManager").StopScoring();
+
+		Player.SetPhysicsProcess(false);
+
+		foreach (Node node in NPCContainer.GetChildren())
+			node.SetPhysicsProcess(false);
+
+		foreach (Node node in PassiveFishContainer.GetChildren())
+			node.SetPhysicsProcess(false);
+
+		SceneTransition.FadeToScene(
+			GetTree(),
+			"res://Scenes/nameinput.tscn",
+			0.38f
+		);
 	}
 }

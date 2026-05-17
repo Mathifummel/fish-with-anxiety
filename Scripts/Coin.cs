@@ -22,7 +22,7 @@ public partial class Coin : Area2D
 				"/root/ScoreManager"
 			);
 
-			sm.BonusScore += Value;
+			sm.CollectCoin(Value);
 
 			QueueFree();
 		}

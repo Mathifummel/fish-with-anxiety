@@ -2,6 +2,27 @@ using Godot;
 
 public partial class PlayerFish : CharacterBody2D
 {
+	public enum ControlScheme
+	{
+		ArrowKeys,
+		WASD,
+		Mouse,
+		Custom
+	}
+
+	public static ControlScheme CurrentControlScheme = ControlScheme.ArrowKeys;
+
+	public const string CustomMoveUp = "custom_move_up";
+	public const string CustomMoveDown = "custom_move_down";
+	public const string CustomMoveLeft = "custom_move_left";
+	public const string CustomMoveRight = "custom_move_right";
+	public const string CustomBoost = "custom_boost";
+
+	private const string ControlsSavePath = "user://control_settings.cfg";
+	private const string ControlsSection = "controls";
+	private const string BindingsSection = "bindings";
+	private static bool controlsLoaded = false;
+
 	// =========================================
 	// MOVEMENT
 	// =========================================
@@ -69,6 +90,7 @@ public partial class PlayerFish : CharacterBody2D
 	public override void _Ready()
 	{
 		fishSprite = GetNode<Sprite2D>("Sprite2D");
+		LoadControlSettings();
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -81,19 +103,30 @@ public partial class PlayerFish : CharacterBody2D
 
 		Vector2 dir = Vector2.Zero;
 
-		if (Input.IsActionPressed("ui_right"))
-			dir += Vector2.Right;
+		switch (CurrentControlScheme)
+		{
+			case ControlScheme.WASD:
+				dir = GetKeyDirection(Key.W, Key.S, Key.A, Key.D);
+				break;
 
-		if (Input.IsActionPressed("ui_left"))
-			dir += Vector2.Left;
+			case ControlScheme.Mouse:
+				Vector2 toMouse = GetGlobalMousePosition() - GlobalPosition;
+				dir = toMouse.Length() > 12f ? toMouse.Normalized() : Vector2.Zero;
+				break;
 
-		if (Input.IsActionPressed("ui_down"))
-			dir += Vector2.Down;
+			case ControlScheme.Custom:
+				dir = GetActionDirection(
+					CustomMoveUp,
+					CustomMoveDown,
+					CustomMoveLeft,
+					CustomMoveRight
+				);
+				break;
 
-		if (Input.IsActionPressed("ui_up"))
-			dir += Vector2.Up;
-
-		dir = dir.Normalized();
+			default:
+				dir = GetKeyDirection(Key.Up, Key.Down, Key.Left, Key.Right);
+				break;
+		}
 
 		// =========================================
 		// COOLDOWN
@@ -112,7 +145,7 @@ public partial class PlayerFish : CharacterBody2D
 
 		if (!boostActive &&
 			boostCooldownTimer <= 0f &&
-			Input.IsActionJustPressed("ui_accept"))
+			IsBoostJustPressed())
 		{
 			// 🟢 PERFECT WINDOW
 			if (CurrentStress >= GreenBoostMin &&
@@ -263,5 +296,188 @@ public partial class PlayerFish : CharacterBody2D
 			return 0f;
 
 		return currentStressDrain;
+	}
+
+	private Vector2 GetKeyDirection(Key up, Key down, Key left, Key right)
+	{
+		Vector2 dir = Vector2.Zero;
+
+		if (Input.IsKeyPressed(right))
+			dir += Vector2.Right;
+
+		if (Input.IsKeyPressed(left))
+			dir += Vector2.Left;
+
+		if (Input.IsKeyPressed(down))
+			dir += Vector2.Down;
+
+		if (Input.IsKeyPressed(up))
+			dir += Vector2.Up;
+
+		return dir.Normalized();
+	}
+
+	private Vector2 GetActionDirection(string up, string down, string left, string right)
+	{
+		Vector2 dir = Vector2.Zero;
+
+		if (Input.IsActionPressed(right))
+			dir += Vector2.Right;
+
+		if (Input.IsActionPressed(left))
+			dir += Vector2.Left;
+
+		if (Input.IsActionPressed(down))
+			dir += Vector2.Down;
+
+		if (Input.IsActionPressed(up))
+			dir += Vector2.Up;
+
+		return dir.Normalized();
+	}
+
+	private bool IsBoostJustPressed()
+	{
+		if (CurrentControlScheme == ControlScheme.Custom)
+			return Input.IsActionJustPressed(CustomBoost);
+
+		return Input.IsActionJustPressed("ui_accept");
+	}
+
+	public static void EnsureCustomInputDefaults()
+	{
+		EnsureAction(CustomMoveUp, Key.W);
+		EnsureAction(CustomMoveDown, Key.S);
+		EnsureAction(CustomMoveLeft, Key.A);
+		EnsureAction(CustomMoveRight, Key.D);
+		EnsureAction(CustomBoost, Key.Space);
+	}
+
+	public static void SetCustomInput(string action, InputEvent inputEvent)
+	{
+		EnsureAction(action, Key.None);
+		InputMap.ActionEraseEvents(action);
+		InputMap.ActionAddEvent(action, inputEvent);
+		SaveControlSettings();
+	}
+
+	public static void SetControlScheme(ControlScheme scheme)
+	{
+		LoadControlSettings();
+		CurrentControlScheme = scheme;
+		SaveControlSettings();
+	}
+
+	public static string GetCustomInputLabel(string action)
+	{
+		EnsureAction(action, Key.None);
+
+		var events = InputMap.ActionGetEvents(action);
+		if (events.Count == 0)
+			return "-";
+
+		return events[0].AsText();
+	}
+
+	private static void EnsureAction(string action, Key defaultKey)
+	{
+		if (!InputMap.HasAction(action))
+			InputMap.AddAction(action);
+
+		if (defaultKey == Key.None || InputMap.ActionGetEvents(action).Count > 0)
+			return;
+
+		InputEventKey keyEvent = new InputEventKey();
+		keyEvent.PhysicalKeycode = defaultKey;
+		InputMap.ActionAddEvent(action, keyEvent);
+	}
+
+	public static void LoadControlSettings()
+	{
+		EnsureCustomInputDefaults();
+
+		if (controlsLoaded)
+			return;
+
+		controlsLoaded = true;
+
+		ConfigFile config = new ConfigFile();
+		if (config.Load(ControlsSavePath) != Error.Ok)
+			return;
+
+		CurrentControlScheme = (ControlScheme)config
+			.GetValue(ControlsSection, "scheme", (int)ControlScheme.ArrowKeys)
+			.AsInt32();
+
+		LoadAction(config, CustomMoveUp);
+		LoadAction(config, CustomMoveDown);
+		LoadAction(config, CustomMoveLeft);
+		LoadAction(config, CustomMoveRight);
+		LoadAction(config, CustomBoost);
+	}
+
+	public static void SaveControlSettings()
+	{
+		EnsureCustomInputDefaults();
+
+		ConfigFile config = new ConfigFile();
+		config.SetValue(ControlsSection, "scheme", (int)CurrentControlScheme);
+
+		SaveAction(config, CustomMoveUp);
+		SaveAction(config, CustomMoveDown);
+		SaveAction(config, CustomMoveLeft);
+		SaveAction(config, CustomMoveRight);
+		SaveAction(config, CustomBoost);
+
+		config.Save(ControlsSavePath);
+	}
+
+	private static void SaveAction(ConfigFile config, string action)
+	{
+		var events = InputMap.ActionGetEvents(action);
+
+		if (events.Count == 0)
+			return;
+
+		InputEvent inputEvent = events[0];
+
+		if (inputEvent is InputEventKey keyEvent)
+		{
+			config.SetValue(BindingsSection, $"{action}_type", "key");
+			config.SetValue(BindingsSection, $"{action}_value", (long)keyEvent.PhysicalKeycode);
+		}
+		else if (inputEvent is InputEventMouseButton mouseEvent)
+		{
+			config.SetValue(BindingsSection, $"{action}_type", "mouse");
+			config.SetValue(BindingsSection, $"{action}_value", (int)mouseEvent.ButtonIndex);
+		}
+	}
+
+	private static void LoadAction(ConfigFile config, string action)
+	{
+		if (!config.HasSectionKey(BindingsSection, $"{action}_type") ||
+			!config.HasSectionKey(BindingsSection, $"{action}_value"))
+		{
+			return;
+		}
+
+		string type = config.GetValue(BindingsSection, $"{action}_type").AsString();
+		long value = config.GetValue(BindingsSection, $"{action}_value").AsInt64();
+
+		EnsureAction(action, Key.None);
+		InputMap.ActionEraseEvents(action);
+
+		if (type == "key")
+		{
+			InputEventKey keyEvent = new InputEventKey();
+			keyEvent.PhysicalKeycode = (Key)value;
+			InputMap.ActionAddEvent(action, keyEvent);
+		}
+		else if (type == "mouse")
+		{
+			InputEventMouseButton mouseEvent = new InputEventMouseButton();
+			mouseEvent.ButtonIndex = (MouseButton)value;
+			InputMap.ActionAddEvent(action, mouseEvent);
+		}
 	}
 }

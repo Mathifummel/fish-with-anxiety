@@ -2,6 +2,12 @@ using Godot;
 
 public partial class NPCFish : CharacterBody2D
 {
+	public enum MovementMode
+	{
+		Chase,
+		Crossing
+	}
+
 	[Export] public float Speed = 120f;
 	[Export] public float RotationSpeed = 3f;
 
@@ -22,6 +28,9 @@ public partial class NPCFish : CharacterBody2D
 	[Export] public float CollisionRadius = 40f;
 
 	public Node2D Player; // assigned from Main
+	public MovementMode Mode = MovementMode.Chase;
+	public Vector2 CrossingDirection = Vector2.Right;
+	public float CrossingLifetime = 5.5f;
 
 	private Sprite2D fishSprite;
 	private float swimTime = 0f;
@@ -39,6 +48,14 @@ public partial class NPCFish : CharacterBody2D
 
 	public override void _PhysicsProcess(double delta)
 	{
+		float dt = (float)delta;
+
+		if (Mode == MovementMode.Crossing)
+		{
+			UpdateCrossingMovement(dt);
+			return;
+		}
+
 		if (Player == null) return;
 
 		Vector2 toPlayer = (Player.Position - Position).Normalized();
@@ -80,7 +97,7 @@ public partial class NPCFish : CharacterBody2D
 		if (boostTimer > 0)
 		{
 			currentSpeed *= BoostMultiplier;
-			boostTimer -= (float)delta;
+			boostTimer -= dt;
 		}
 
 		Vector2 finalDir = (offsetDir + separation).Normalized();
@@ -88,10 +105,29 @@ public partial class NPCFish : CharacterBody2D
 		Velocity = finalDir * currentSpeed;
 		MoveAndSlide();
 
-		// Rotation + wiggle
+		UpdateRotation(dt);
+	}
+
+	private void UpdateCrossingMovement(float dt)
+	{
+		CrossingLifetime -= dt;
+
+		if (CrossingLifetime <= 0f)
+		{
+			QueueFree();
+			return;
+		}
+
+		Velocity = CrossingDirection.Normalized() * Speed;
+		MoveAndSlide();
+		UpdateRotation(dt);
+	}
+
+	private void UpdateRotation(float dt)
+	{
 		if (Velocity.Length() > 0.1f)
 		{
-			swimTime += (float)delta;
+			swimTime += dt;
 
 			float targetRotation = Velocity.Angle() + Mathf.Pi;
 			float wiggle = Mathf.Sin(swimTime * SwimFrequency) * SwimAmplitude;
@@ -99,7 +135,7 @@ public partial class NPCFish : CharacterBody2D
 			fishSprite.Rotation = Mathf.LerpAngle(
 				fishSprite.Rotation,
 				targetRotation + wiggle,
-				(float)delta * RotationSpeed
+				dt * RotationSpeed
 			);
 		}
 	}

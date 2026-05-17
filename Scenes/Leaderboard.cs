@@ -6,45 +6,63 @@ public partial class Leaderboard : Control
 
 	private VBoxContainer RowsContainer;
 	private Label SummaryLabel;
+	private VideoStreamPlayer backgroundVideo;
+	private float visualTime = 0f;
 
 	public override void _Ready()
 	{
 		BuildLayout();
 		LoadLeaderboard();
+		SceneTransition.FadeIn(GetTree(), 0.28f);
+	}
+
+	public override void _Process(double delta)
+	{
+		visualTime += (float)delta;
+		AnimateBackground();
 	}
 
 	private void BuildLayout()
 	{
 		SetAnchorsPreset(LayoutPreset.FullRect);
 
-		ColorRect background = new ColorRect();
-		background.Color = new Color(0.02f, 0.08f, 0.12f);
-		background.SetAnchorsPreset(LayoutPreset.FullRect);
-		AddChild(background);
+		AddVideoBackground();
+		AddTintOverlay();
 
 		MarginContainer pageMargin = new MarginContainer();
 		pageMargin.SetAnchorsPreset(LayoutPreset.FullRect);
-		pageMargin.AddThemeConstantOverride("margin_left", 42);
-		pageMargin.AddThemeConstantOverride("margin_top", 34);
-		pageMargin.AddThemeConstantOverride("margin_right", 42);
-		pageMargin.AddThemeConstantOverride("margin_bottom", 34);
+		pageMargin.AddThemeConstantOverride("margin_left", 36);
+		pageMargin.AddThemeConstantOverride("margin_top", 24);
+		pageMargin.AddThemeConstantOverride("margin_right", 36);
+		pageMargin.AddThemeConstantOverride("margin_bottom", 24);
 		AddChild(pageMargin);
 
-		CenterContainer center = new CenterContainer();
-		center.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-		center.SizeFlagsVertical = SizeFlags.ExpandFill;
-		pageMargin.AddChild(center);
+		VBoxContainer page = new VBoxContainer();
+		page.Alignment = BoxContainer.AlignmentMode.Center;
+		page.AddThemeConstantOverride("separation", 16);
+		page.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		page.SizeFlagsVertical = SizeFlags.ExpandFill;
+		pageMargin.AddChild(page);
+
+		TextureRect logo = new TextureRect();
+		logo.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Logo.png");
+		logo.ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional;
+		logo.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		logo.CustomMinimumSize = new Vector2(560, 106);
+		logo.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		page.AddChild(logo);
 
 		PanelContainer board = new PanelContainer();
-		board.CustomMinimumSize = new Vector2(680, 560);
+		board.CustomMinimumSize = new Vector2(660, 470);
 		board.AddThemeStyleboxOverride("panel", CreateBoardStyle());
-		center.AddChild(board);
+		board.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		page.AddChild(board);
 
 		MarginContainer boardMargin = new MarginContainer();
-		boardMargin.AddThemeConstantOverride("margin_left", 34);
-		boardMargin.AddThemeConstantOverride("margin_top", 28);
-		boardMargin.AddThemeConstantOverride("margin_right", 34);
-		boardMargin.AddThemeConstantOverride("margin_bottom", 28);
+		boardMargin.AddThemeConstantOverride("margin_left", 30);
+		boardMargin.AddThemeConstantOverride("margin_top", 24);
+		boardMargin.AddThemeConstantOverride("margin_right", 30);
+		boardMargin.AddThemeConstantOverride("margin_bottom", 24);
 		board.AddChild(boardMargin);
 
 		VBoxContainer content = new VBoxContainer();
@@ -78,6 +96,43 @@ public partial class Leaderboard : Control
 		Button playButton = CreateButton("Nochmal spielen");
 		playButton.Pressed += OnPlayButtonPressed;
 		buttons.AddChild(playButton);
+	}
+
+	private void AddVideoBackground()
+	{
+		backgroundVideo = new VideoStreamPlayer();
+		backgroundVideo.Stream = ResourceLoader.Load<VideoStream>("res://Assets/underwater.ogv");
+		backgroundVideo.SpeedScale = 2.57f;
+		backgroundVideo.Autoplay = true;
+		backgroundVideo.Expand = true;
+		backgroundVideo.Loop = true;
+		backgroundVideo.SetAnchorsPreset(LayoutPreset.FullRect);
+		backgroundVideo.PivotOffset = GetViewportRect().Size * 0.5f;
+		AddChild(backgroundVideo);
+	}
+
+	private void AnimateBackground()
+	{
+		if (backgroundVideo == null)
+			return;
+
+		float driftX = Mathf.Sin(visualTime * 0.11f) * 24f;
+		float driftY = Mathf.Cos(visualTime * 0.09f) * 16f;
+		float zoom = 1.055f + Mathf.Sin(visualTime * 0.075f) * 0.018f;
+
+		backgroundVideo.OffsetLeft = -42f + driftX;
+		backgroundVideo.OffsetTop = -32f + driftY;
+		backgroundVideo.OffsetRight = 42f + driftX;
+		backgroundVideo.OffsetBottom = 32f + driftY;
+		backgroundVideo.Scale = new Vector2(zoom, zoom);
+	}
+
+	private void AddTintOverlay()
+	{
+		ColorRect overlay = new ColorRect();
+		overlay.Color = new Color(0.01f, 0.06f, 0.09f, 0.28f);
+		overlay.SetAnchorsPreset(LayoutPreset.FullRect);
+		AddChild(overlay);
 	}
 
 	private PanelContainer CreateHeaderRow()
@@ -194,6 +249,11 @@ public partial class Leaderboard : Control
 		button.Text = text;
 		button.CustomMinimumSize = new Vector2(170, 42);
 		button.AddThemeFontSizeOverride("font_size", 18);
+		button.AddThemeStyleboxOverride("normal", CreateButtonStyle(new Color(0.03f, 0.16f, 0.22f, 0.88f)));
+		button.AddThemeStyleboxOverride("hover", CreateButtonStyle(new Color(0.07f, 0.27f, 0.34f, 0.94f)));
+		button.AddThemeStyleboxOverride("pressed", CreateButtonStyle(new Color(0.02f, 0.11f, 0.16f, 0.96f)));
+		button.AddThemeColorOverride("font_color", new Color(0.9f, 0.98f, 1f));
+		button.AddThemeColorOverride("font_hover_color", new Color(1f, 1f, 1f));
 		return button;
 	}
 
@@ -210,8 +270,8 @@ public partial class Leaderboard : Control
 	private StyleBoxFlat CreateBoardStyle()
 	{
 		StyleBoxFlat style = new StyleBoxFlat();
-		style.BgColor = new Color(0.03f, 0.12f, 0.17f, 0.94f);
-		style.BorderColor = new Color(0.36f, 0.72f, 0.82f, 0.55f);
+		style.BgColor = new Color(0.02f, 0.1f, 0.15f, 0.76f);
+		style.BorderColor = new Color(0.45f, 0.82f, 0.9f, 0.48f);
 		style.BorderWidthLeft = 2;
 		style.BorderWidthTop = 2;
 		style.BorderWidthRight = 2;
@@ -220,6 +280,22 @@ public partial class Leaderboard : Control
 		style.CornerRadiusTopRight = 8;
 		style.CornerRadiusBottomLeft = 8;
 		style.CornerRadiusBottomRight = 8;
+		return style;
+	}
+
+	private StyleBoxFlat CreateButtonStyle(Color color)
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = color;
+		style.BorderColor = new Color(0.54f, 0.86f, 0.94f, 0.48f);
+		style.BorderWidthLeft = 1;
+		style.BorderWidthTop = 1;
+		style.BorderWidthRight = 1;
+		style.BorderWidthBottom = 1;
+		style.CornerRadiusTopLeft = 7;
+		style.CornerRadiusTopRight = 7;
+		style.CornerRadiusBottomLeft = 7;
+		style.CornerRadiusBottomRight = 7;
 		return style;
 	}
 
@@ -254,11 +330,11 @@ public partial class Leaderboard : Control
 
 	private void OnBackButtonPressed()
 	{
-		GetTree().ChangeSceneToFile("res://Scenes/MainMenu.tscn");
+		SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.32f);
 	}
 
 	private void OnPlayButtonPressed()
 	{
-		GetTree().ChangeSceneToFile("res://Scenes/main.tscn");
+		SceneTransition.FadeToScene(GetTree(), "res://Scenes/main.tscn", 0.32f);
 	}
 }

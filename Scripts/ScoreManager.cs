@@ -14,12 +14,21 @@ public partial class ScoreManager : Node
 	public float SurvivalTime = 0f;
 
 	public int BonusScore = 0;
+	public int CoinsThisRun = 0;
+	public int TotalCoins = 0;
 
 	public int CurrentScore = 0;
 	public bool IsRunning = false;
 
 	private const string SavePath =
 		"user://highscores.json";
+	private const string CoinSavePath =
+		"user://coins.save";
+
+	public override void _Ready()
+	{
+		LoadTotalCoins();
+	}
 
 	public override void _Process(double delta)
 	{
@@ -55,8 +64,17 @@ public partial class ScoreManager : Node
 		SurvivalTime = 0f;
 
 		BonusScore = 0;
+		CoinsThisRun = 0;
 
 		CurrentScore = 0;
+	}
+
+	public void CollectCoin(int scoreValue)
+	{
+		CoinsThisRun++;
+		TotalCoins++;
+		BonusScore += scoreValue;
+		SaveTotalCoins();
 	}
 
 	public void StartScoring()
@@ -67,6 +85,37 @@ public partial class ScoreManager : Node
 	public void StopScoring()
 	{
 		IsRunning = false;
+	}
+
+	private void SaveTotalCoins()
+	{
+		var file = FileAccess.Open(
+			CoinSavePath,
+			FileAccess.ModeFlags.Write
+		);
+
+		file.StoreString(TotalCoins.ToString());
+		file.Close();
+	}
+
+	private void LoadTotalCoins()
+	{
+		if (!FileAccess.FileExists(CoinSavePath))
+		{
+			TotalCoins = 0;
+			return;
+		}
+
+		var file = FileAccess.Open(
+			CoinSavePath,
+			FileAccess.ModeFlags.Read
+		);
+
+		string content = file.GetAsText().Trim();
+		file.Close();
+
+		if (!int.TryParse(content, out TotalCoins))
+			TotalCoins = 0;
 	}
 
 	// SAVE
