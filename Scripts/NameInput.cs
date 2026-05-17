@@ -291,16 +291,15 @@ public partial class NameInput : Control
 		fallenPlayerFish.Rotation = leaderRotation - 0.08f + Mathf.Sin(effectTimer * 0.9f) * 0.03f;
 		fallenPlayerFish.Modulate = new Color(0.94f, 0.99f, 0.98f, 0.36f + panic * 0.1f);
 
-		BackdropFishSwim.PlaceFollowers(
-			leaderPos,
-			leaderRotation,
-			tangent,
-			chasingFish,
+		BackdropFishSwim.PlaceFollowersOnPath(
+			DeathSwimPath,
+			viewport,
+			deathPathProgress,
 			effectTimer * 0.95f,
-			78f,
-			38f,
-			16f,
-			6f
+			wobbleStrength,
+			chasingFish,
+			0.07f,
+			14f
 		);
 
 		for (int i = 0; i < chasingFish.Length; i++)

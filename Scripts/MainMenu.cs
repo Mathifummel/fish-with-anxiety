@@ -78,15 +78,18 @@ public partial class MainMenu : Control
 		CanvasLayer canvas = GetNode<CanvasLayer>("CanvasLayer");
 		menuFishLayer = new Node2D();
 		menuFishLayer.Name = "MenuFishShowcase";
+		menuFishLayer.ZIndex = 1;
 		canvas.AddChild(menuFishLayer);
-		canvas.MoveChild(menuFishLayer, 2);
 
-		menuPlayerFish = CreateMenuFish("res://Assets/MainCharacter.png", new Vector2(0.24f, 0.24f), 0);
+		int logoIndex = canvas.GetNode("TextureRect").GetIndex();
+		canvas.MoveChild(menuFishLayer, logoIndex);
+
+		menuPlayerFish = CreateMenuFish("res://Assets/MainCharacter.png", new Vector2(0.26f, 0.26f), 5);
 		menuFishLayer.AddChild(menuPlayerFish);
 
 		for (int i = 0; i < menuNpcFish.Length; i++)
 		{
-			menuNpcFish[i] = CreateMenuFish("res://Assets/EnemyCharacter.png", new Vector2(0.17f, 0.17f), -1);
+			menuNpcFish[i] = CreateMenuFish("res://Assets/EnemyCharacter.png", new Vector2(0.2f, 0.2f), 4 - i);
 			menuFishLayer.AddChild(menuNpcFish[i]);
 		}
 
@@ -155,20 +158,19 @@ public partial class MainMenu : Control
 		menuPlayerFish.Rotation = leaderRotation + Mathf.Sin(visualTime * 2.2f) * 0.05f;
 		menuPlayerFish.Modulate = new Color(0.98f, 1f, 0.99f, 0.56f + panicPulse * 0.08f);
 
-		BackdropFishSwim.PlaceFollowers(
-			leaderPos,
-			leaderRotation,
-			tangent,
-			menuNpcFish,
+		BackdropFishSwim.PlaceFollowersOnPath(
+			menuSwimPath,
+			viewport,
+			menuPathProgress,
 			visualTime * 1.75f,
-			64f,
-			34f,
-			18f,
-			12f
+			28f,
+			menuNpcFish,
+			0.055f,
+			22f
 		);
 
 		for (int i = 0; i < menuNpcFish.Length; i++)
-			menuNpcFish[i].Modulate = new Color(1f, 1f, 1f, 0.5f - i * 0.04f);
+			menuNpcFish[i].Modulate = new Color(1f, 1f, 1f, 0.62f - i * 0.05f);
 	}
 
 	private void CreateCoinCounter()

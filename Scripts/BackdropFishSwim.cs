@@ -74,6 +74,49 @@ public static class BackdropFishSwim
 		return fallbackTangent.Angle() + Mathf.Pi;
 	}
 
+	public static void PlaceFollowersOnPath(
+		FishSwimPath path,
+		Vector2 viewport,
+		float leaderProgress,
+		float wobblePhase,
+		float wobbleStrength,
+		Sprite2D[] followers,
+		float progressLagStep,
+		float laneSpread)
+	{
+		if (followers == null || followers.Length == 0)
+			return;
+
+		for (int i = 0; i < followers.Length; i++)
+		{
+			float lagT = Mathf.Max(0f, leaderProgress - progressLagStep * (i + 1));
+			float lane = (i - (followers.Length - 1) * 0.5f) * laneSpread;
+			float phase = wobblePhase - i * 0.35f;
+
+			Vector2 followerPos = SamplePosition(
+				path,
+				viewport,
+				lagT,
+				phase,
+				wobbleStrength,
+				out Vector2 tangent
+			);
+
+			Vector2 laneOffset = new Vector2(-tangent.Y, tangent.X).Normalized() * lane;
+			followers[i].Position = followerPos + laneOffset;
+
+			Vector2 lookAheadPos = SamplePosition(
+				path,
+				viewport,
+				Mathf.Min(1f, lagT + 0.012f),
+				phase,
+				wobbleStrength,
+				out _
+			);
+			followers[i].Rotation = GetLeaderRotation(followerPos, lookAheadPos, tangent);
+		}
+	}
+
 	public static void PlaceFollowers(
 		Vector2 leaderPosition,
 		float leaderRotation,
@@ -86,6 +129,9 @@ public static class BackdropFishSwim
 		float wobbleStrength)
 	{
 		Vector2 backDirection = -leaderTangent.Normalized();
+		if (backDirection.LengthSquared() < 0.0001f)
+			backDirection = Vector2.Left;
+
 		Vector2 sideDirection = new Vector2(-backDirection.Y, backDirection.X);
 
 		for (int i = 0; i < followers.Length; i++)
