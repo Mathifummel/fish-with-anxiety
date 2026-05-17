@@ -12,6 +12,10 @@ public partial class MainMenu : Control
 	private Sprite2D menuPlayerFish;
 	private Sprite2D[] menuNpcFish = new Sprite2D[4];
 	private float visualTime = 0f;
+	private FishSwimPath menuSwimPath = FishSwimPath.LeftToRight;
+	private float menuPathProgress = 0f;
+	private Vector2 menuLastLeaderPos = Vector2.Zero;
+	private const float MenuSwimSpeed = 188f;
 	private readonly Dictionary<string, Button> customButtons = new Dictionary<string, Button>();
 
 	public override void _Ready()
@@ -85,6 +89,16 @@ public partial class MainMenu : Control
 			menuNpcFish[i] = CreateMenuFish("res://Assets/EnemyCharacter.png", new Vector2(0.17f, 0.17f), -1);
 			menuFishLayer.AddChild(menuNpcFish[i]);
 		}
+
+		Vector2 viewport = GetViewportRect().Size;
+		menuLastLeaderPos = BackdropFishSwim.SamplePosition(
+			menuSwimPath,
+			viewport,
+			0f,
+			0f,
+			26f,
+			out _
+		);
 	}
 
 	private Sprite2D CreateMenuFish(string texturePath, Vector2 scale, int zIndex)
@@ -103,33 +117,58 @@ public partial class MainMenu : Control
 			return;
 
 		Vector2 viewport = GetViewportRect().Size;
-		float pathWidth = viewport.X + 640f;
-		float swimSpeed = 132f;
-		float baseX = ((visualTime * swimSpeed) % pathWidth) - 320f;
-		float laneY = viewport.Y * 0.38f + Mathf.Sin(visualTime * 0.55f) * viewport.Y * 0.055f;
-		float baseY = laneY + Mathf.Sin(visualTime * 1.35f) * 28f;
-		float swimAngle = Mathf.Sin(visualTime * 1.55f) * 0.07f;
+		float pathLength = Mathf.Max(BackdropFishSwim.GetPathLength(menuSwimPath, viewport), 1f);
+		float delta = (float)GetProcessDeltaTime();
+		menuPathProgress += delta * MenuSwimSpeed / pathLength;
 
-		menuPlayerFish.Position = new Vector2(baseX, baseY);
-		menuPlayerFish.Rotation = Mathf.Pi + swimAngle;
-		menuPlayerFish.Modulate = new Color(0.96f, 1f, 0.98f, 0.58f);
+		if (menuPathProgress >= 1f)
+		{
+			menuPathProgress = 0f;
+			menuSwimPath = BackdropFishSwim.PickNextPath(menuSwimPath);
+			menuLastLeaderPos = BackdropFishSwim.SamplePosition(
+				menuSwimPath,
+				viewport,
+				0f,
+				visualTime,
+				30f,
+				out _
+			);
+		}
+
+		Vector2 leaderPos = BackdropFishSwim.SamplePosition(
+			menuSwimPath,
+			viewport,
+			menuPathProgress,
+			visualTime * 1.65f,
+			30f,
+			out Vector2 tangent
+		);
+		float leaderRotation = BackdropFishSwim.GetLeaderRotation(
+			menuLastLeaderPos,
+			leaderPos,
+			tangent
+		);
+		menuLastLeaderPos = leaderPos;
+
+		float panicPulse = 0.5f + Mathf.Sin(visualTime * 3.4f) * 0.5f;
+		menuPlayerFish.Position = leaderPos;
+		menuPlayerFish.Rotation = leaderRotation + Mathf.Sin(visualTime * 2.2f) * 0.05f;
+		menuPlayerFish.Modulate = new Color(0.98f, 1f, 0.99f, 0.56f + panicPulse * 0.08f);
+
+		BackdropFishSwim.PlaceFollowers(
+			leaderPos,
+			leaderRotation,
+			tangent,
+			menuNpcFish,
+			visualTime * 1.75f,
+			64f,
+			34f,
+			18f,
+			12f
+		);
 
 		for (int i = 0; i < menuNpcFish.Length; i++)
-		{
-			float lag = 72f + i * 38f + Mathf.Sin(visualTime * 1.8f + i) * 9f;
-			float followBlend = 0.72f + i * 0.06f;
-			float wave = Mathf.Sin(visualTime * 1.65f + i * 1.18f) * (14f + i * 2.5f);
-			float followerX = Mathf.Lerp(baseX - lag, baseX - lag * 0.82f, followBlend);
-			float followerY = Mathf.Lerp(
-				baseY + wave + (i - 1.5f) * 18f,
-				baseY + wave * 0.65f + (i - 1.5f) * 16f,
-				followBlend
-			);
-
-			menuNpcFish[i].Position = new Vector2(followerX, followerY);
-			menuNpcFish[i].Rotation = Mathf.Pi + swimAngle + Mathf.Sin(visualTime * 1.85f + i) * 0.09f;
-			menuNpcFish[i].Modulate = new Color(1f, 1f, 1f, 0.48f - i * 0.04f);
-		}
+			menuNpcFish[i].Modulate = new Color(1f, 1f, 1f, 0.5f - i * 0.04f);
 	}
 
 	private void CreateCoinCounter()

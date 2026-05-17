@@ -14,6 +14,10 @@ public partial class NameInput : Control
 	private Control resultPanelHost;
 	private float effectTimer = 0f;
 	private bool scoreSaved = false;
+	private const FishSwimPath DeathSwimPath = FishSwimPath.LeftToRight;
+	private float deathPathProgress = 0f;
+	private Vector2 deathLastLeaderPos = Vector2.Zero;
+	private const float DeathSwimSpeed = 58f;
 
 	public override void _Ready()
 	{
@@ -34,23 +38,25 @@ public partial class NameInput : Control
 		if (stressOverlay == null || blushOverlay == null)
 			return;
 
+		float calm = Mathf.Clamp(effectTimer / 2.2f, 0f, 1f);
 		float stressPulse =
 			(Mathf.Sin(effectTimer * 16f) + 1f) * 0.5f;
 		float blushPulse =
 			(Mathf.Sin(effectTimer * 9f + 1.4f) + 1f) * 0.5f;
+		float effectStrength = Mathf.Lerp(1f, 0.35f, calm);
 
 		stressOverlay.Color = new Color(
 			1f,
 			0.08f,
 			0.08f,
-			0.08f + stressPulse * 0.12f
+			(0.08f + stressPulse * 0.12f) * effectStrength
 		);
 
 		blushOverlay.Color = new Color(
 			1f,
 			0.2f,
 			0.42f,
-			0.04f + blushPulse * 0.08f
+			(0.04f + blushPulse * 0.08f) * effectStrength
 		);
 	}
 
@@ -200,6 +206,16 @@ public partial class NameInput : Control
 			chasingFish[i] = CreateBackdropFish("res://Assets/EnemyCharacter.png", new Vector2(0.2f, 0.2f), 0.3f - i * 0.045f);
 			deathFishLayer.AddChild(chasingFish[i]);
 		}
+
+		Vector2 viewport = GetViewportRect().Size;
+		deathLastLeaderPos = BackdropFishSwim.SamplePosition(
+			DeathSwimPath,
+			viewport,
+			0f,
+			0f,
+			10f,
+			out _
+		);
 	}
 
 	private Sprite2D CreateBackdropFish(string texturePath, Vector2 scale, float alpha)
@@ -216,9 +232,10 @@ public partial class NameInput : Control
 		if (backgroundVideo == null)
 			return;
 
-		float driftX = Mathf.Sin(effectTimer * 0.12f) * 26f;
-		float driftY = Mathf.Cos(effectTimer * 0.1f) * 18f;
-		float zoom = 1.06f + Mathf.Sin(effectTimer * 0.08f) * 0.018f;
+		float calm = Mathf.Clamp(effectTimer / 2.4f, 0f, 1f);
+		float driftX = Mathf.Sin(effectTimer * 0.1f) * Mathf.Lerp(22f, 8f, calm);
+		float driftY = Mathf.Cos(effectTimer * 0.085f) * Mathf.Lerp(16f, 6f, calm);
+		float zoom = 1.04f + Mathf.Sin(effectTimer * 0.06f) * Mathf.Lerp(0.016f, 0.006f, calm);
 
 		backgroundVideo.OffsetLeft = -44f + driftX;
 		backgroundVideo.OffsetTop = -34f + driftY;
@@ -233,29 +250,61 @@ public partial class NameInput : Control
 			return;
 
 		Vector2 viewport = GetViewportRect().Size;
-		float pathWidth = viewport.X + 520f;
-		float swimSpeed = 118f;
-		float baseX = ((effectTimer * swimSpeed) % pathWidth) - 260f;
-		float laneY = viewport.Y * 0.42f + Mathf.Sin(effectTimer * 0.5f) * viewport.Y * 0.04f;
-		float baseY = laneY + Mathf.Sin(effectTimer * 1.2f) * 22f;
-		float swimAngle = Mathf.Sin(effectTimer * 1.4f) * 0.06f;
-		float panic = Mathf.Max(0f, 1f - effectTimer / 1.4f);
+		float pathLength = Mathf.Max(BackdropFishSwim.GetPathLength(DeathSwimPath, viewport), 1f);
+		float delta = (float)GetProcessDeltaTime();
+		float exhaustion = Mathf.Clamp(effectTimer / 3.5f, 0f, 1f);
+		float currentSpeed = Mathf.Lerp(DeathSwimSpeed, DeathSwimSpeed * 0.72f, exhaustion);
 
-		fallenPlayerFish.Position = new Vector2(baseX, baseY);
-		fallenPlayerFish.Rotation = Mathf.Pi + swimAngle - 0.12f;
-		fallenPlayerFish.Modulate = new Color(0.96f, 1f, 0.98f, 0.4f + panic * 0.12f);
+		deathPathProgress += delta * currentSpeed / pathLength;
+
+		if (deathPathProgress >= 1f)
+		{
+			deathPathProgress = 0f;
+			deathLastLeaderPos = BackdropFishSwim.SamplePosition(
+				DeathSwimPath,
+				viewport,
+				0f,
+				effectTimer,
+				10f,
+				out _
+			);
+		}
+
+		float wobbleStrength = Mathf.Lerp(14f, 8f, exhaustion);
+		Vector2 leaderPos = BackdropFishSwim.SamplePosition(
+			DeathSwimPath,
+			viewport,
+			deathPathProgress,
+			effectTimer * 0.85f,
+			wobbleStrength,
+			out Vector2 tangent
+		);
+		float leaderRotation = BackdropFishSwim.GetLeaderRotation(
+			deathLastLeaderPos,
+			leaderPos,
+			tangent
+		);
+		deathLastLeaderPos = leaderPos;
+
+		float panic = Mathf.Max(0f, 1f - effectTimer / 1.6f);
+		fallenPlayerFish.Position = leaderPos;
+		fallenPlayerFish.Rotation = leaderRotation - 0.08f + Mathf.Sin(effectTimer * 0.9f) * 0.03f;
+		fallenPlayerFish.Modulate = new Color(0.94f, 0.99f, 0.98f, 0.36f + panic * 0.1f);
+
+		BackdropFishSwim.PlaceFollowers(
+			leaderPos,
+			leaderRotation,
+			tangent,
+			chasingFish,
+			effectTimer * 0.95f,
+			78f,
+			38f,
+			16f,
+			6f
+		);
 
 		for (int i = 0; i < chasingFish.Length; i++)
-		{
-			float lag = 68f + i * 36f + Mathf.Sin(effectTimer * 1.7f + i) * 8f;
-			float wave = Mathf.Sin(effectTimer * 1.55f + i * 1.1f) * (15f + i * 2.5f);
-			chasingFish[i].Position = new Vector2(
-				baseX - lag,
-				baseY + wave + (i - 1f) * 18f
-			);
-			chasingFish[i].Rotation = Mathf.Pi + swimAngle + Mathf.Sin(effectTimer * 1.75f + i) * 0.08f;
-			chasingFish[i].Modulate = new Color(1f, 1f, 1f, 0.32f - i * 0.04f);
-		}
+			chasingFish[i].Modulate = new Color(1f, 1f, 1f, 0.28f - i * 0.035f);
 	}
 
 	private void AnimateResultPanel()
@@ -264,15 +313,19 @@ public partial class NameInput : Control
 			return;
 
 		float panic = Mathf.Max(0f, 1f - effectTimer / 1.15f);
-		float shake = Mathf.Sin(effectTimer * 38f) * 3f * panic;
+		float shake = Mathf.Sin(effectTimer * 34f) * 2.5f * panic;
 		float appear = Mathf.Clamp(effectTimer / 0.42f, 0f, 1f);
-		Vector2 hostSize = resultPanelHost.CustomMinimumSize;
 
-		resultPanelHost.PivotOffset = hostSize * 0.5f;
-		resultPanelHost.Position = new Vector2(shake, Mathf.Sin(effectTimer * 1.2f) * panic);
-		resultPanelHost.Scale = new Vector2(
-			0.96f + appear * 0.04f + panic * 0.015f,
-			0.96f + appear * 0.04f + panic * 0.015f
+		resultPanelHost.Position = Vector2.Zero;
+		resultPanelHost.Scale = Vector2.One;
+		resultPanelHost.PivotOffset = resultPanelHost.CustomMinimumSize * 0.5f;
+
+		Vector2 panelPivot = resultPanelHost.CustomMinimumSize * 0.5f;
+		resultPanel.Position = new Vector2(shake, Mathf.Sin(effectTimer * 1.1f) * panic * 0.6f);
+		resultPanel.PivotOffset = panelPivot;
+		resultPanel.Scale = new Vector2(
+			0.97f + appear * 0.03f,
+			0.97f + appear * 0.03f
 		);
 		resultPanel.Modulate = new Color(1f, 1f, 1f, appear);
 	}
