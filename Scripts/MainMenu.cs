@@ -104,25 +104,31 @@ public partial class MainMenu : Control
 
 		Vector2 viewport = GetViewportRect().Size;
 		float pathWidth = viewport.X + 640f;
-		float baseX = ((visualTime * 78f) % pathWidth) - 320f;
-		float laneY = viewport.Y * 0.38f + Mathf.Sin(visualTime * 0.45f) * viewport.Y * 0.055f;
-		float baseY = laneY + Mathf.Sin(visualTime * 1.15f) * 28f;
-		float swimAngle = Mathf.Sin(visualTime * 1.35f) * 0.07f;
+		float swimSpeed = 132f;
+		float baseX = ((visualTime * swimSpeed) % pathWidth) - 320f;
+		float laneY = viewport.Y * 0.38f + Mathf.Sin(visualTime * 0.55f) * viewport.Y * 0.055f;
+		float baseY = laneY + Mathf.Sin(visualTime * 1.35f) * 28f;
+		float swimAngle = Mathf.Sin(visualTime * 1.55f) * 0.07f;
 
 		menuPlayerFish.Position = new Vector2(baseX, baseY);
 		menuPlayerFish.Rotation = Mathf.Pi + swimAngle;
-		menuPlayerFish.Modulate = new Color(0.96f, 1f, 0.98f, 0.52f);
+		menuPlayerFish.Modulate = new Color(0.96f, 1f, 0.98f, 0.58f);
 
 		for (int i = 0; i < menuNpcFish.Length; i++)
 		{
-			float lag = 104f + i * 48f + Mathf.Sin(visualTime * 1.6f + i) * 11f;
-			float wave = Mathf.Sin(visualTime * 1.45f + i * 1.18f) * (17f + i * 3f);
-			menuNpcFish[i].Position = new Vector2(
-				baseX - lag,
-				baseY + wave + (i - 1.5f) * 20f
+			float lag = 72f + i * 38f + Mathf.Sin(visualTime * 1.8f + i) * 9f;
+			float followBlend = 0.72f + i * 0.06f;
+			float wave = Mathf.Sin(visualTime * 1.65f + i * 1.18f) * (14f + i * 2.5f);
+			float followerX = Mathf.Lerp(baseX - lag, baseX - lag * 0.82f, followBlend);
+			float followerY = Mathf.Lerp(
+				baseY + wave + (i - 1.5f) * 18f,
+				baseY + wave * 0.65f + (i - 1.5f) * 16f,
+				followBlend
 			);
-			menuNpcFish[i].Rotation = Mathf.Pi + swimAngle + Mathf.Sin(visualTime * 1.7f + i) * 0.1f;
-			menuNpcFish[i].Modulate = new Color(1f, 1f, 1f, 0.42f - i * 0.045f);
+
+			menuNpcFish[i].Position = new Vector2(followerX, followerY);
+			menuNpcFish[i].Rotation = Mathf.Pi + swimAngle + Mathf.Sin(visualTime * 1.85f + i) * 0.09f;
+			menuNpcFish[i].Modulate = new Color(1f, 1f, 1f, 0.48f - i * 0.04f);
 		}
 	}
 

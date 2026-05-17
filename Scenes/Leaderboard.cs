@@ -20,6 +20,17 @@ public partial class Leaderboard : Control
 	{
 		visualTime += (float)delta;
 		AnimateBackground();
+		UpdateRowsContainerWidth();
+	}
+
+	private void UpdateRowsContainerWidth()
+	{
+		if (RowsContainer == null)
+			return;
+
+		float width = RowsContainer.GetParent<ScrollContainer>()?.Size.X ?? 0f;
+		if (width > 0f)
+			RowsContainer.CustomMinimumSize = new Vector2(width, 0f);
 	}
 
 	private void BuildLayout()
@@ -48,14 +59,16 @@ public partial class Leaderboard : Control
 		logo.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Logo.png");
 		logo.ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional;
 		logo.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
-		logo.CustomMinimumSize = new Vector2(560, 106);
+		logo.CustomMinimumSize = new Vector2(420, 72);
 		logo.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		logo.SizeFlagsVertical = SizeFlags.ShrinkBegin;
 		page.AddChild(logo);
 
 		PanelContainer board = new PanelContainer();
-		board.CustomMinimumSize = new Vector2(660, 470);
+		board.CustomMinimumSize = new Vector2(620, 0);
 		board.AddThemeStyleboxOverride("panel", CreateBoardStyle());
 		board.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		board.SizeFlagsVertical = SizeFlags.ExpandFill;
 		page.AddChild(board);
 
 		MarginContainer boardMargin = new MarginContainer();
@@ -79,10 +92,17 @@ public partial class Leaderboard : Control
 
 		content.AddChild(CreateHeaderRow());
 
+		ScrollContainer scroll = new ScrollContainer();
+		scroll.SizeFlagsVertical = SizeFlags.ExpandFill;
+		scroll.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		scroll.HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled;
+		scroll.VerticalScrollMode = ScrollContainer.ScrollMode.Auto;
+		content.AddChild(scroll);
+
 		RowsContainer = new VBoxContainer();
 		RowsContainer.AddThemeConstantOverride("separation", 7);
-		RowsContainer.SizeFlagsVertical = SizeFlags.ExpandFill;
-		content.AddChild(RowsContainer);
+		RowsContainer.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		scroll.AddChild(RowsContainer);
 
 		HBoxContainer buttons = new HBoxContainer();
 		buttons.Alignment = BoxContainer.AlignmentMode.Center;

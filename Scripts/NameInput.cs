@@ -7,9 +7,11 @@ public partial class NameInput : Control
 	private ColorRect blushOverlay;
 	private VideoStreamPlayer backgroundVideo;
 	private PanelContainer resultPanel;
+	private CanvasLayer backdropLayer;
 	private Node2D deathFishLayer;
 	private Sprite2D fallenPlayerFish;
 	private Sprite2D[] chasingFish = new Sprite2D[3];
+	private Control resultPanelHost;
 	private float effectTimer = 0f;
 	private bool scoreSaved = false;
 
@@ -60,6 +62,10 @@ public partial class NameInput : Control
 
 	private void BuildLayout()
 	{
+		backdropLayer = new CanvasLayer();
+		backdropLayer.Layer = -2;
+		AddChild(backdropLayer);
+
 		AddVideoBackground();
 		AddDeathBackdropFish();
 		AddTintOverlay();
@@ -88,11 +94,16 @@ public partial class NameInput : Control
 		logo.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
 		page.AddChild(logo);
 
+		resultPanelHost = new Control();
+		resultPanelHost.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		resultPanelHost.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+		resultPanelHost.CustomMinimumSize = new Vector2(620, 410);
+		page.AddChild(resultPanelHost);
+
 		resultPanel = new PanelContainer();
-		resultPanel.CustomMinimumSize = new Vector2(620, 410);
-		resultPanel.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		resultPanel.SetAnchorsPreset(LayoutPreset.FullRect);
 		resultPanel.AddThemeStyleboxOverride("panel", CreatePanelStyle());
-		page.AddChild(resultPanel);
+		resultPanelHost.AddChild(resultPanel);
 
 		MarginContainer panelMargin = new MarginContainer();
 		panelMargin.AddThemeConstantOverride("margin_left", 34);
@@ -172,14 +183,14 @@ public partial class NameInput : Control
 		backgroundVideo.Loop = true;
 		backgroundVideo.SetAnchorsPreset(LayoutPreset.FullRect);
 		backgroundVideo.PivotOffset = GetViewportRect().Size * 0.5f;
-		AddChild(backgroundVideo);
+		backdropLayer.AddChild(backgroundVideo);
 	}
 
 	private void AddDeathBackdropFish()
 	{
 		deathFishLayer = new Node2D();
 		deathFishLayer.Name = "DeathBackdropFish";
-		AddChild(deathFishLayer);
+		backdropLayer.AddChild(deathFishLayer);
 
 		fallenPlayerFish = CreateBackdropFish("res://Assets/MainCharacter.png", new Vector2(0.3f, 0.3f), 0.42f);
 		deathFishLayer.AddChild(fallenPlayerFish);
@@ -222,43 +233,46 @@ public partial class NameInput : Control
 			return;
 
 		Vector2 viewport = GetViewportRect().Size;
-		float centerX = viewport.X * 0.5f;
-		float centerY = viewport.Y * 0.5f;
+		float pathWidth = viewport.X + 520f;
+		float swimSpeed = 118f;
+		float baseX = ((effectTimer * swimSpeed) % pathWidth) - 260f;
+		float laneY = viewport.Y * 0.42f + Mathf.Sin(effectTimer * 0.5f) * viewport.Y * 0.04f;
+		float baseY = laneY + Mathf.Sin(effectTimer * 1.2f) * 22f;
+		float swimAngle = Mathf.Sin(effectTimer * 1.4f) * 0.06f;
 		float panic = Mathf.Max(0f, 1f - effectTimer / 1.4f);
 
-		fallenPlayerFish.Position = new Vector2(
-			centerX + Mathf.Sin(effectTimer * 0.9f) * 34f,
-			centerY + 84f + Mathf.Sin(effectTimer * 1.25f) * 12f + effectTimer * 7f
-		);
-		fallenPlayerFish.Rotation = -0.46f + Mathf.Sin(effectTimer * 1.15f) * 0.08f;
-		fallenPlayerFish.Modulate = new Color(0.96f, 1f, 0.98f, 0.38f + panic * 0.1f);
+		fallenPlayerFish.Position = new Vector2(baseX, baseY);
+		fallenPlayerFish.Rotation = Mathf.Pi + swimAngle - 0.12f;
+		fallenPlayerFish.Modulate = new Color(0.96f, 1f, 0.98f, 0.4f + panic * 0.12f);
 
 		for (int i = 0; i < chasingFish.Length; i++)
 		{
-			float lane = i - 1f;
-			float x = centerX - 360f + ((effectTimer * (44f + i * 9f) + i * 150f) % (viewport.X + 460f));
-			float y = viewport.Y * 0.28f + lane * 54f + Mathf.Sin(effectTimer * 1.1f + i) * 18f;
-
-			chasingFish[i].Position = new Vector2(x - 230f, y);
-			chasingFish[i].Rotation = Mathf.Pi + Mathf.Sin(effectTimer * 1.5f + i) * 0.09f;
-			chasingFish[i].Modulate = new Color(1f, 1f, 1f, 0.24f - i * 0.035f);
+			float lag = 68f + i * 36f + Mathf.Sin(effectTimer * 1.7f + i) * 8f;
+			float wave = Mathf.Sin(effectTimer * 1.55f + i * 1.1f) * (15f + i * 2.5f);
+			chasingFish[i].Position = new Vector2(
+				baseX - lag,
+				baseY + wave + (i - 1f) * 18f
+			);
+			chasingFish[i].Rotation = Mathf.Pi + swimAngle + Mathf.Sin(effectTimer * 1.75f + i) * 0.08f;
+			chasingFish[i].Modulate = new Color(1f, 1f, 1f, 0.32f - i * 0.04f);
 		}
 	}
 
 	private void AnimateResultPanel()
 	{
-		if (resultPanel == null)
+		if (resultPanelHost == null || resultPanel == null)
 			return;
 
 		float panic = Mathf.Max(0f, 1f - effectTimer / 1.15f);
-		float shake = Mathf.Sin(effectTimer * 38f) * 4f * panic;
-		float breathe = Mathf.Sin(effectTimer * 1.2f) * 2f;
+		float shake = Mathf.Sin(effectTimer * 38f) * 3f * panic;
 		float appear = Mathf.Clamp(effectTimer / 0.42f, 0f, 1f);
-		resultPanel.Position = new Vector2(shake, breathe);
-		resultPanel.PivotOffset = resultPanel.Size * 0.5f;
-		resultPanel.Scale = new Vector2(
-			0.96f + appear * 0.04f + panic * 0.018f,
-			0.96f + appear * 0.04f + panic * 0.018f
+		Vector2 hostSize = resultPanelHost.CustomMinimumSize;
+
+		resultPanelHost.PivotOffset = hostSize * 0.5f;
+		resultPanelHost.Position = new Vector2(shake, Mathf.Sin(effectTimer * 1.2f) * panic);
+		resultPanelHost.Scale = new Vector2(
+			0.96f + appear * 0.04f + panic * 0.015f,
+			0.96f + appear * 0.04f + panic * 0.015f
 		);
 		resultPanel.Modulate = new Color(1f, 1f, 1f, appear);
 	}
@@ -267,8 +281,9 @@ public partial class NameInput : Control
 	{
 		ColorRect overlay = new ColorRect();
 		overlay.Color = new Color(0.01f, 0.06f, 0.09f, 0.34f);
+		overlay.MouseFilter = MouseFilterEnum.Ignore;
 		overlay.SetAnchorsPreset(LayoutPreset.FullRect);
-		AddChild(overlay);
+		backdropLayer.AddChild(overlay);
 	}
 
 	private void AddDeathEffectOverlay()
