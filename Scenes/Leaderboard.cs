@@ -3,6 +3,7 @@ using Godot;
 public partial class Leaderboard : Control
 {
 	private const int MaxRows = 10;
+	private const int BoardWidth = 620;
 
 	private VBoxContainer RowsContainer;
 	private Label SummaryLabel;
@@ -20,17 +21,6 @@ public partial class Leaderboard : Control
 	{
 		visualTime += (float)delta;
 		AnimateBackground();
-		UpdateRowsContainerWidth();
-	}
-
-	private void UpdateRowsContainerWidth()
-	{
-		if (RowsContainer == null)
-			return;
-
-		float width = RowsContainer.GetParent<ScrollContainer>()?.Size.X ?? 0f;
-		if (width > 0f)
-			RowsContainer.CustomMinimumSize = new Vector2(width, 0f);
 	}
 
 	private void BuildLayout()
@@ -51,25 +41,31 @@ public partial class Leaderboard : Control
 		VBoxContainer page = new VBoxContainer();
 		page.Alignment = BoxContainer.AlignmentMode.Center;
 		page.AddThemeConstantOverride("separation", 16);
-		page.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		page.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
 		page.SizeFlagsVertical = SizeFlags.ExpandFill;
 		pageMargin.AddChild(page);
 
 		TextureRect logo = new TextureRect();
 		logo.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Logo.png");
-		logo.ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional;
+		logo.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
 		logo.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
 		logo.CustomMinimumSize = new Vector2(420, 72);
 		logo.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
 		logo.SizeFlagsVertical = SizeFlags.ShrinkBegin;
 		page.AddChild(logo);
 
+		CenterContainer boardCenter = new CenterContainer();
+		boardCenter.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		boardCenter.SizeFlagsVertical = SizeFlags.ExpandFill;
+		boardCenter.CustomMinimumSize = new Vector2(BoardWidth, 0);
+		page.AddChild(boardCenter);
+
 		PanelContainer board = new PanelContainer();
-		board.CustomMinimumSize = new Vector2(620, 0);
+		board.CustomMinimumSize = new Vector2(BoardWidth, 420);
 		board.AddThemeStyleboxOverride("panel", CreateBoardStyle());
 		board.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
-		board.SizeFlagsVertical = SizeFlags.ExpandFill;
-		page.AddChild(board);
+		board.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+		boardCenter.AddChild(board);
 
 		MarginContainer boardMargin = new MarginContainer();
 		boardMargin.AddThemeConstantOverride("margin_left", 30);
@@ -80,6 +76,7 @@ public partial class Leaderboard : Control
 
 		VBoxContainer content = new VBoxContainer();
 		content.AddThemeConstantOverride("separation", 14);
+		content.SizeFlagsHorizontal = SizeFlags.Fill;
 		boardMargin.AddChild(content);
 
 		Label title = CreateLabel("Bestenliste", 42, new Color(0.92f, 0.98f, 1f));
@@ -101,7 +98,8 @@ public partial class Leaderboard : Control
 
 		RowsContainer = new VBoxContainer();
 		RowsContainer.AddThemeConstantOverride("separation", 7);
-		RowsContainer.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		RowsContainer.SizeFlagsHorizontal = SizeFlags.Fill;
+		RowsContainer.CustomMinimumSize = new Vector2(BoardWidth - 60, 0);
 		scroll.AddChild(RowsContainer);
 
 		HBoxContainer buttons = new HBoxContainer();
@@ -158,7 +156,8 @@ public partial class Leaderboard : Control
 	private PanelContainer CreateHeaderRow()
 	{
 		PanelContainer panel = new PanelContainer();
-		panel.CustomMinimumSize = new Vector2(0, 38);
+		panel.CustomMinimumSize = new Vector2(BoardWidth - 60, 38);
+		panel.SizeFlagsHorizontal = SizeFlags.Fill;
 		panel.AddThemeStyleboxOverride("panel", CreateRowStyle(new Color(0.08f, 0.22f, 0.28f, 0.95f), 1f));
 
 		MarginContainer margin = CreateRowMargin();
@@ -214,7 +213,8 @@ public partial class Leaderboard : Control
 				: new Color(0.04f, 0.12f, 0.17f, 0.82f);
 
 		PanelContainer panel = new PanelContainer();
-		panel.CustomMinimumSize = new Vector2(0, 42);
+		panel.CustomMinimumSize = new Vector2(BoardWidth - 60, 42);
+		panel.SizeFlagsHorizontal = SizeFlags.Fill;
 		panel.AddThemeStyleboxOverride("panel", CreateRowStyle(bgColor, rank == 1 ? 1.2f : 0.35f));
 
 		MarginContainer margin = CreateRowMargin();
