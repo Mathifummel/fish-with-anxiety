@@ -21,6 +21,11 @@ public partial class Main : Node2D
 	[Export] public Node2D ObstacleContainer;
 	[Export] public PackedScene ObstacleScene;
 
+	// RARE ITEMS (Level 3+)
+	[Export] public Node2D ItemContainer;
+	[Export] public PackedScene AlcoholItemScene;
+	[Export] public PackedScene ChorusFruitItemScene;
+
 	// STRESS
 	[Export] public float DangerRadius = 400f;
 	[Export] public float CalmRadius = 650f;
@@ -69,11 +74,24 @@ public partial class Main : Node2D
 	[Export] public float SwarmSpacing = 76f;
 	[Export] public float SwarmSpawnDelay = 2.1f;
 
+	[Export] public int MinItemLevel = 3;
+	[Export] public int MaxItemsInWorld = 1;
+	[Export] public float ItemSpawnChance = 0.07f;
+	[Export] public float MinItemSpacing = 920f;
+	[Export] public float AlcoholDuration = 7f;
+	[Export] public float NpcFleeSpeedMultiplier = 1.35f;
+	[Export] public float ChorusTeleportDistance = 760f;
+	[Export] public float ChorusMinEnemyDistance = 420f;
+
+	public bool ShouldNpcsFlee => invincibilityTimer > 0f;
+
 	private ProgressBar StressBar;
 	private Label ScoreLabel;
 	private Label CoinLabel;
 	private Label CountdownLabel;
 	private Label LevelNoticeLabel;
+	private Label ItemEffectLabel;
+	private float invincibilityTimer = 0f;
 
 	private float Stress = 0f;
 	private float countdownTimer = 0f;
@@ -97,6 +115,7 @@ public partial class Main : Node2D
 
 	public override void _Ready()
 	{
+		AddToGroup("game_main");
 		CreateBackgroundLayer();
 
 		StressBar = GetNode<ProgressBar>("UI/StressBar");
@@ -104,6 +123,7 @@ public partial class Main : Node2D
 		SetupUi();
 		CreateCountdownLabel();
 		CreateLevelNoticeLabel();
+		CreateItemEffectLabel();
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 		sm.Reset();
@@ -157,6 +177,7 @@ public partial class Main : Node2D
 		UpdateDifficulty(sm.CurrentScore);
 		UpdatePendingSwarm(dt);
 		UpdateLevelNotice(dt);
+		UpdateItemEffects(dt);
 		UpdateWorldStreaming(dt);
 	}
 
@@ -430,6 +451,232 @@ public partial class Main : Node2D
 		ObstacleContainer.AddChild(obstacle);
 	}
 
+	// =====================================
+	// RARE ITEMS
+	// =====================================
+
+	private void TrySpawnRareItem()
+	{
+		if (currentLevel < MinItemLevel || ItemContainer == null)
+			return;
+
+		if (CountLiveItems() >= MaxItemsInWorld)
+			return;
+
+		if (GD.Randf() > ItemSpawnChance)
+			return;
+
+		ItemType type = GD.Randf() < 0.5f ? ItemType.Alcohol : ItemType.ChorusFruit;
+		Vector2? spawnPos = GetItemSpawnPosition();
+
+		if (spawnPos == null)
+			return;
+
+		PickupItem item = type == ItemType.Alcohol
+			? AlcoholItemScene.Instantiate<PickupItem>()
+			: ChorusFruitItemScene.Instantiate<PickupItem>();
+
+		item.Type = type;
+		item.Position = spawnPos.Value;
+		ItemContainer.AddChild(item);
+	}
+
+	private int CountLiveItems()
+	{
+		if (ItemContainer == null)
+			return 0;
+
+		int count = 0;
+
+		foreach (Node child in ItemContainer.GetChildren())
+		{
+			if (!child.IsQueuedForDeletion())
+				count++;
+		}
+
+		return count;
+	}
+
+	private Vector2? GetItemSpawnPosition()
+	{
+		for (int i = 0; i < MaxSpawnAttempts; i++)
+		{
+			float angle = (float)GD.RandRange(0f, Mathf.Tau);
+			float distance = (float)GD.RandRange(MinSpawnDistance, MaxSpawnDistance);
+			Vector2 candidate = Player.Position + Vector2.FromAngle(angle) * distance;
+
+			if (IsItemSpawnPositionSafe(candidate))
+				return candidate;
+		}
+
+		return null;
+	}
+
+	private bool IsItemSpawnPositionSafe(Vector2 candidate)
+	{
+		if (!IsSpawnPositionSafe(candidate))
+			return false;
+
+		if (ItemContainer == null)
+			return true;
+
+		foreach (Node child in ItemContainer.GetChildren())
+		{
+			if (child is Node2D item && !item.IsQueuedForDeletion())
+			{
+				if (candidate.DistanceTo(item.Position) < MinItemSpacing)
+					return false;
+			}
+		}
+
+		return true;
+	}
+
+	public void ApplyItem(ItemType type)
+	{
+		switch (type)
+		{
+			case ItemType.Alcohol:
+				ApplyAlcoholEffect();
+				break;
+			case ItemType.ChorusFruit:
+				ApplyChorusFruitEffect();
+				break;
+		}
+	}
+
+	private void ApplyAlcoholEffect()
+	{
+		invincibilityTimer = AlcoholDuration;
+		Player.SetInvincible(true);
+		Stress = 0f;
+		Player.CurrentStress = 0f;
+		StressBar.Value = 0f;
+		ShowLevelNotice("Alkohol: kurz unverwundbar!");
+		UpdateItemEffectLabel();
+	}
+
+	private void ApplyChorusFruitEffect()
+	{
+		Player.GlobalPosition = FindChorusTeleportPosition();
+		Stress = Mathf.Min(Stress, 55f);
+		Player.CurrentStress = Stress;
+		StressBar.Value = Stress;
+		ShowLevelNotice("Chorusfrucht: wegteleportiert!");
+		UpdateItemEffectLabel();
+	}
+
+	private Vector2 FindChorusTeleportPosition()
+	{
+		Vector2 awayDirection = Vector2.Zero;
+		float nearestDist = float.MaxValue;
+
+		foreach (Node node in NPCContainer.GetChildren())
+		{
+			if (node is not NPCFish npc)
+				continue;
+
+			float dist = Player.Position.DistanceTo(npc.Position);
+
+			if (dist >= nearestDist)
+				continue;
+
+			nearestDist = dist;
+			awayDirection = (Player.Position - npc.Position).Normalized();
+		}
+
+		if (awayDirection.LengthSquared() < 0.01f)
+			awayDirection = GetPlayerMoveDirection();
+
+		Vector2 forward = GetPlayerMoveDirection();
+		Vector2[] directions =
+		{
+			awayDirection,
+			awayDirection.Rotated(Mathf.Pi * 0.35f),
+			awayDirection.Rotated(-Mathf.Pi * 0.35f),
+			forward,
+			-forward
+		};
+
+		foreach (Vector2 dir in directions)
+		{
+			if (dir.LengthSquared() < 0.01f)
+				continue;
+
+			Vector2 candidate =
+				Player.Position + dir.Normalized() * ChorusTeleportDistance;
+
+			if (IsChorusTeleportSafe(candidate))
+				return candidate;
+		}
+
+		return Player.Position + awayDirection.Normalized() * ChorusTeleportDistance * 0.7f;
+	}
+
+	private bool IsChorusTeleportSafe(Vector2 position)
+	{
+		foreach (Node node in NPCContainer.GetChildren())
+		{
+			if (node is NPCFish npc &&
+				position.DistanceTo(npc.Position) < ChorusMinEnemyDistance)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private void UpdateItemEffects(float dt)
+	{
+		if (invincibilityTimer > 0f)
+		{
+			invincibilityTimer -= dt;
+
+			if (invincibilityTimer <= 0f)
+			{
+				invincibilityTimer = 0f;
+				Player.SetInvincible(false);
+			}
+		}
+
+		UpdateItemEffectLabel();
+	}
+
+	private void CreateItemEffectLabel()
+	{
+		ItemEffectLabel = new Label();
+		ItemEffectLabel.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+		ItemEffectLabel.OffsetLeft = 24f;
+		ItemEffectLabel.OffsetTop = 50f;
+		ItemEffectLabel.OffsetRight = 420f;
+		ItemEffectLabel.OffsetBottom = 78f;
+		ItemEffectLabel.AddThemeFontSizeOverride("font_size", 17);
+		ItemEffectLabel.AddThemeColorOverride("font_color", new Color(0.88f, 1f, 0.95f));
+		ItemEffectLabel.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.65f));
+		ItemEffectLabel.AddThemeConstantOverride("shadow_offset_x", 2);
+		ItemEffectLabel.AddThemeConstantOverride("shadow_offset_y", 2);
+		ItemEffectLabel.Hide();
+
+		GetNode<CanvasLayer>("UI").AddChild(ItemEffectLabel);
+	}
+
+	private void UpdateItemEffectLabel()
+	{
+		if (ItemEffectLabel == null)
+			return;
+
+		if (invincibilityTimer > 0f)
+		{
+			ItemEffectLabel.Text =
+				$"Unverwundbar: {invincibilityTimer:0.0}s";
+			ItemEffectLabel.Show();
+			return;
+		}
+
+		ItemEffectLabel.Hide();
+	}
+
 	private Vector2 GetSafeSpawnPosition(bool preferChaseAngle = false)
 	{
 		Vector2 fallback = Player.Position + Vector2.Right * MinSpawnDistance;
@@ -541,6 +788,8 @@ public partial class Main : Node2D
 		AddNode2DChildren(nodes, PassiveFishContainer);
 		AddNode2DChildren(nodes, CoinContainer);
 		AddNode2DChildren(nodes, ObstacleContainer);
+		if (ItemContainer != null)
+			AddNode2DChildren(nodes, ItemContainer);
 
 		return nodes;
 	}
@@ -567,6 +816,7 @@ public partial class Main : Node2D
 		DespawnFarChildren(PassiveFishContainer);
 		DespawnFarChildren(CoinContainer);
 		DespawnFarChildren(ObstacleContainer);
+		DespawnFarChildren(ItemContainer);
 
 		if (Player.Position.DistanceTo(lastStreamPosition) < SpawnMovementStep)
 			return;
@@ -577,10 +827,14 @@ public partial class Main : Node2D
 		FillContainer(PassiveFishContainer, TargetPassiveFishCount, SpawnPassiveFish);
 		FillContainer(CoinContainer, TargetCoinCount, SpawnCoin);
 		FillContainer(ObstacleContainer, TargetObstacleCount, SpawnObstacle);
+		TrySpawnRareItem();
 	}
 
 	private void DespawnFarChildren(Node container)
 	{
+		if (container == null)
+			return;
+
 		foreach (Node child in container.GetChildren())
 		{
 			if (child is Node2D node &&
@@ -772,6 +1026,16 @@ public partial class Main : Node2D
 			return;
 
 		float dt = (float)delta;
+		bool invincible = Player.IsInvincible || invincibilityTimer > 0f;
+
+		if (invincible)
+		{
+			Stress = Mathf.MoveToward(Stress, 0f, 95f * dt);
+			Player.CurrentStress = Stress;
+			StressBar.Value = Stress;
+			UpdateStressBarColor();
+			return;
+		}
 
 		float threatPressure = 0f;
 		float contactPressure = 0f;
@@ -850,22 +1114,17 @@ public partial class Main : Node2D
 			return;
 		}
 
-		// UI COLORS
+		UpdateStressBarColor();
+	}
+
+	private void UpdateStressBarColor()
+	{
 		if (Stress < 40)
-		{
-			stressFillStyle.BgColor =
-				new Color(0.25f, 0.67f, 1f);
-		}
+			stressFillStyle.BgColor = new Color(0.25f, 0.67f, 1f);
 		else if (Stress <= 60)
-		{
-			stressFillStyle.BgColor =
-				new Color(0.35f, 0.95f, 0.48f);
-		}
+			stressFillStyle.BgColor = new Color(0.35f, 0.95f, 0.48f);
 		else
-		{
-			stressFillStyle.BgColor =
-				new Color(1f, 0.34f, 0.31f);
-		}
+			stressFillStyle.BgColor = new Color(1f, 0.34f, 0.31f);
 	}
 
 	private void GameOver()

@@ -80,6 +80,7 @@ public partial class PlayerFish : CharacterBody2D
 
 	public bool IsBoosting = false;
 	public float CurrentStress = 0f;
+	public bool IsInvincible = false;
 
 	private Sprite2D fishSprite;
 	private float swimTime = 0f;
@@ -260,6 +261,7 @@ public partial class PlayerFish : CharacterBody2D
 		Velocity = currentVelocity;
 
 		MoveAndSlide();
+		UpdateInvincibleVisual();
 
 		// =========================================
 		// ROTATION + SWIM
@@ -296,6 +298,23 @@ public partial class PlayerFish : CharacterBody2D
 			return 0f;
 
 		return currentStressDrain;
+	}
+
+	public void SetInvincible(bool active)
+	{
+		IsInvincible = active;
+
+		if (!active && fishSprite != null)
+			fishSprite.Modulate = Colors.White;
+	}
+
+	private void UpdateInvincibleVisual()
+	{
+		if (!IsInvincible || fishSprite == null)
+			return;
+
+		float pulse = 0.82f + Mathf.Sin(Time.GetTicksMsec() * 0.008f) * 0.12f;
+		fishSprite.Modulate = new Color(0.75f, 1f, 0.95f, pulse);
 	}
 
 	private Vector2 GetKeyDirection(Key up, Key down, Key left, Key right)

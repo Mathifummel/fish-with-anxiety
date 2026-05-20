@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://c8itemalk001"]
+
+[ext_resource type="Script" path="res://Scripts/PickupItem.cs" id="1_item"]
+[ext_resource type="Texture2D" uid="uid://chetg2yiuvuq" path="res://Assets/Alkohol.jpeg" id="2_tex"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_item"]
+radius = 22.0
+
+[node name="ItemAlcohol" type="Area2D"]
+script = ExtResource("1_item")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_item")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.14, 0.14)
+texture = ExtResource("2_tex")

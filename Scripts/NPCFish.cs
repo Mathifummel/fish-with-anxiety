@@ -58,6 +58,14 @@ public partial class NPCFish : CharacterBody2D
 
 		if (Player == null) return;
 
+		Main main = GetTree().GetFirstNodeInGroup("game_main") as Main;
+
+		if (main != null && main.ShouldNpcsFlee)
+		{
+			UpdateFleeMovement(dt, main);
+			return;
+		}
+
 		Vector2 toPlayer = (Player.Position - Position).Normalized();
 
 		// Offset movement
@@ -119,6 +127,38 @@ public partial class NPCFish : CharacterBody2D
 		}
 
 		Velocity = CrossingDirection.Normalized() * Speed;
+		MoveAndSlide();
+		UpdateRotation(dt);
+	}
+
+	private void UpdateFleeMovement(float dt, Main main)
+	{
+		Vector2 awayFromPlayer = (Position - Player.Position);
+
+		if (awayFromPlayer.LengthSquared() < 1f)
+			awayFromPlayer = Vector2.FromAngle(rng.RandfRange(0f, Mathf.Tau));
+
+		awayFromPlayer = awayFromPlayer.Normalized();
+
+		Vector2 separation = Vector2.Zero;
+
+		foreach (Node node in GetTree().GetNodesInGroup("fish"))
+		{
+			if (node == this || node is not NPCFish other)
+				continue;
+
+			float dist = Position.DistanceTo(other.Position);
+
+			if (dist < SeparationRadius && dist > 0f)
+				separation += (Position - other.Position).Normalized() / Mathf.Max(dist, 10f);
+		}
+
+		separation *= SeparationStrength * 0.35f;
+
+		Vector2 fleeDir = (awayFromPlayer + separation).Normalized();
+		float fleeSpeed = Speed * main.NpcFleeSpeedMultiplier;
+
+		Velocity = fleeDir * fleeSpeed;
 		MoveAndSlide();
 		UpdateRotation(dt);
 	}
