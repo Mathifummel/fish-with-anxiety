@@ -74,7 +74,8 @@ public partial class Main : Node2D
 	[Export] public float SwarmSpacing = 76f;
 	[Export] public float SwarmSpawnDelay = 2.1f;
 
-	[Export] public int MinItemLevel = 3;
+	[Export] public int MinAlcoholLevel = 3;
+	[Export] public int MinChorusFruitLevel = 2;
 	[Export] public int MaxItemsInWorld = 1;
 	[Export] public float ItemSpawnChance = 0.07f;
 	[Export] public float MinItemSpacing = 920f;
@@ -457,7 +458,12 @@ public partial class Main : Node2D
 
 	private void TrySpawnRareItem()
 	{
-		if (currentLevel < MinItemLevel || ItemContainer == null)
+		if (ItemContainer == null)
+			return;
+
+		ItemType? type = PickRandomItemType();
+
+		if (type == null)
 			return;
 
 		if (CountLiveItems() >= MaxItemsInWorld)
@@ -466,19 +472,35 @@ public partial class Main : Node2D
 		if (GD.Randf() > ItemSpawnChance)
 			return;
 
-		ItemType type = GD.Randf() < 0.5f ? ItemType.Alcohol : ItemType.ChorusFruit;
 		Vector2? spawnPos = GetItemSpawnPosition();
 
 		if (spawnPos == null)
 			return;
 
-		PickupItem item = type == ItemType.Alcohol
+		PickupItem item = type.Value == ItemType.Alcohol
 			? AlcoholItemScene.Instantiate<PickupItem>()
 			: ChorusFruitItemScene.Instantiate<PickupItem>();
 
-		item.Type = type;
+		item.Type = type.Value;
 		item.Position = spawnPos.Value;
 		ItemContainer.AddChild(item);
+	}
+
+	private ItemType? PickRandomItemType()
+	{
+		bool canAlcohol = currentLevel >= MinAlcoholLevel;
+		bool canChorus = currentLevel >= MinChorusFruitLevel;
+
+		if (!canAlcohol && !canChorus)
+			return null;
+
+		if (canAlcohol && canChorus)
+			return GD.Randf() < 0.5f ? ItemType.Alcohol : ItemType.ChorusFruit;
+
+		if (canChorus)
+			return ItemType.ChorusFruit;
+
+		return ItemType.Alcohol;
 	}
 
 	private int CountLiveItems()
