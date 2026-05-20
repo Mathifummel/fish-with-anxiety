@@ -12,8 +12,14 @@ public partial class NameInput : Control
 	private Sprite2D fallenPlayerFish;
 	private Sprite2D[] chasingFish = new Sprite2D[3];
 	private Control resultPanelHost;
+	private Label timerLabel;
+	private Label coinLabel;
+	private Button reviveButton;
 	private float effectTimer = 0f;
+	private float decisionTimer = 10f;
 	private bool scoreSaved = false;
+	private bool decisionExpired = false;
+	private const float DecisionDuration = 10f;
 	private const FishSwimPath DeathSwimPath = FishSwimPath.LeftToRight;
 	private float deathPathProgress = 0f;
 	private Vector2 deathLastLeaderPos = Vector2.Zero;
@@ -30,7 +36,9 @@ public partial class NameInput : Control
 
 	public override void _Process(double delta)
 	{
-		effectTimer += (float)delta;
+		float dt = (float)delta;
+		effectTimer += dt;
+		UpdateDecisionTimer(dt);
 		AnimateBackground();
 		AnimateDeathBackdrop();
 		AnimateResultPanel();
@@ -122,11 +130,11 @@ public partial class NameInput : Control
 		content.AddThemeConstantOverride("separation", 13);
 		panelMargin.AddChild(content);
 
-		Label title = CreateLabel("Runde beendet", 40, new Color(0.94f, 1f, 0.98f));
+		Label title = CreateLabel("Spiel vorbei", 40, new Color(0.94f, 1f, 0.98f));
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(title);
 
-		Label subtitle = CreateLabel("Kurz durchatmen. Das war viel auf einmal.", 18, new Color(0.78f, 0.92f, 0.95f));
+		Label subtitle = CreateLabel("Puh, Kurz durchatmen. Das war viel!", 18, new Color(0.78f, 0.92f, 0.95f));
 		subtitle.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(subtitle);
 
@@ -136,15 +144,32 @@ public partial class NameInput : Control
 		scoreLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(scoreLabel);
 
-		Label coinLabel = CreateLabel(
-			$"Muenzen diese Runde: {sm.CoinsThisRun}  |  Gesamt: {sm.TotalCoins}",
+		timerLabel = CreateLabel(
+			$"Entscheidung: {DecisionDuration:0}s",
+			22,
+			new Color(1f, 0.72f, 0.72f)
+		);
+		timerLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		content.AddChild(timerLabel);
+
+		coinLabel = CreateLabel(
+			$"Münzen diese Runde: {sm.CoinsThisRun}  |  Gesamt: {sm.TotalCoins}",
 			20,
 			new Color(0.98f, 0.9f, 0.34f)
 		);
 		coinLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(coinLabel);
 
-		Label prompt = CreateLabel("Name fuer die Bestenliste", 18, new Color(0.72f, 0.88f, 0.92f));
+		reviveButton = CreateButton($"Wiederbeleben ({ScoreManager.RevivalCost} Münzen)");
+		reviveButton.CustomMinimumSize = new Vector2(340, 48);
+		Texture2D heartTexture = ResourceLoader.Load<Texture2D>("res://Assets/Herz.png");
+		if (heartTexture != null)
+			reviveButton.Icon = heartTexture;
+		reviveButton.Pressed += OnRevivePressed;
+		content.AddChild(reviveButton);
+		UpdateReviveButton();
+
+		Label prompt = CreateLabel("Name für die Bestenliste", 18, new Color(0.72f, 0.88f, 0.92f));
 		prompt.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(prompt);
 
@@ -170,7 +195,7 @@ public partial class NameInput : Control
 		saveButton.Pressed += OnButtonPressed;
 		buttons.AddChild(saveButton);
 
-		Button menuButton = CreateButton("Hauptmenue");
+		Button menuButton = CreateButton("Hauptmenü");
 		menuButton.Pressed += SaveAndExit;
 		buttons.AddChild(menuButton);
 
@@ -434,24 +459,105 @@ public partial class NameInput : Control
 		return style;
 	}
 
+	private void UpdateDecisionTimer(float dt)
+	{
+		if (decisionExpired)
+			return;
+
+		decisionTimer -= dt;
+
+		if (timerLabel != null)
+		{
+			timerLabel.Text = decisionTimer > 0f
+				? $"Entscheidung: {decisionTimer:0.0}s"
+				: "Zeit abgelaufen";
+		}
+
+		UpdateReviveButton();
+
+		if (decisionTimer <= 0f)
+			ForceExitToMenu();
+	}
+
+	private void UpdateReviveButton()
+	{
+		if (reviveButton == null)
+			return;
+
+		var sm = GetNode<ScoreManager>("/root/ScoreManager");
+		bool canAfford = sm.CanAffordRevival();
+		reviveButton.Disabled = decisionExpired || !canAfford;
+
+		if (decisionExpired)
+			reviveButton.Text = "Zeit abgelaufen";
+		else if (!canAfford)
+			reviveButton.Text = $"Wiederbeleben ({ScoreManager.RevivalCost} Münzen) - zu wenig";
+		else
+			reviveButton.Text = $"Wiederbeleben ({ScoreManager.RevivalCost} Münzen)";
+	}
+
+	private void OnRevivePressed()
+	{
+		if (decisionExpired)
+			return;
+
+		var sm = GetNode<ScoreManager>("/root/ScoreManager");
+
+		if (!sm.TryPurchaseRevival())
+		{
+			UpdateReviveButton();
+			return;
+		}
+
+		decisionExpired = true;
+		decisionTimer = 0f;
+
+		if (coinLabel != null)
+			coinLabel.Text = $"Münzen: {sm.TotalCoins} (Wiederbelebung gekauft)";
+
+		SceneTransition.FadeToScene(GetTree(), "res://Scenes/main.tscn", 0.32f);
+	}
+
+	private void ForceExitToMenu()
+	{
+		if (decisionExpired)
+			return;
+
+		decisionExpired = true;
+		decisionTimer = 0f;
+		UpdateReviveButton();
+		SaveAndExit();
+	}
+
 	private void OnLineEditTextSubmitted(string text)
 	{
+		if (!decisionExpired)
+			decisionExpired = true;
+
 		SaveAndExit();
 	}
 
 	private void OnButtonPressed()
 	{
+		if (!decisionExpired)
+			decisionExpired = true;
+
 		SaveAndExit();
 	}
 
 	private void OnRetryButtonPressed()
 	{
+		if (!decisionExpired)
+			decisionExpired = true;
+
 		SaveScore();
+		GetNode<ScoreManager>("/root/ScoreManager").ClearRevivalState();
 		SceneTransition.FadeToScene(GetTree(), "res://Scenes/main.tscn", 0.32f);
 	}
 
 	private void SaveAndExit()
 	{
+		GetNode<ScoreManager>("/root/ScoreManager").ClearRevivalState();
 		SaveScore();
 		SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.32f);
 	}

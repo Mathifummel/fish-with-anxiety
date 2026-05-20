@@ -25,6 +25,7 @@ public partial class Main : Node2D
 	[Export] public Node2D ItemContainer;
 	[Export] public PackedScene AlcoholItemScene;
 	[Export] public PackedScene ChorusFruitItemScene;
+	[Export] public PackedScene TrashItemScene;
 
 	// STRESS
 	[Export] public float DangerRadius = 400f;
@@ -76,6 +77,9 @@ public partial class Main : Node2D
 
 	[Export] public int MinAlcoholLevel = 3;
 	[Export] public int MinChorusFruitLevel = 2;
+	[Export] public int MinTrashLevel = 2;
+	[Export] public float TrashSlowMultiplier = 0.52f;
+	[Export] public float TrashSlowDuration = 5.5f;
 	[Export] public int MaxItemsInWorld = 1;
 	[Export] public float ItemSpawnChance = 0.07f;
 	[Export] public float MinItemSpacing = 920f;
@@ -127,25 +131,63 @@ public partial class Main : Node2D
 		CreateItemEffectLabel();
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
+
+		if (sm.PendingRevival)
+			SetupRevivedRun(sm);
+		else
+			SetupNewRun(sm);
+	}
+
+	private void SetupNewRun(ScoreManager sm)
+	{
 		sm.Reset();
+		sm.ClearRevivalState();
 
 		countdownTimer = CountdownDuration;
 		lastStreamPosition = Player.Position;
 		Player.SetPhysicsProcess(false);
+		gameOverTriggered = false;
+		currentLevel = 1;
+		Stress = 0f;
 
-		// OBSTACLES
+		SpawnInitialWorld();
+	}
+
+	private void SetupRevivedRun(ScoreManager sm)
+	{
+		sm.PendingRevival = false;
+		sm.StartScoring();
+
+		gameOverTriggered = false;
+		gameStarted = true;
+		currentLevel = sm.SavedLevel;
+		Stress = Mathf.Clamp(sm.SavedStress, 0f, 85f);
+		Player.CurrentStress = Stress;
+		StressBar.Value = Stress;
+		Player.GlobalPosition = sm.SavedPlayerPosition;
+		lastStreamPosition = Player.Position;
+		Player.SetInvincible(false);
+		Player.SpeedMultiplier = 1f;
+		Player.SetPhysicsProcess(true);
+		CountdownLabel?.Hide();
+
+		ApplyLevelSettings(currentLevel, false);
+		SpawnInitialWorld();
+		ShowLevelNotice("Wiederbelebt!");
+		UpdateItemEffectLabel();
+	}
+
+	private void SpawnInitialWorld()
+	{
 		for (int i = 0; i < InitialObstacleCount; i++)
 			SpawnObstacle();
 
-		// AGGRESSIVE NPCS
 		for (int i = 0; i < InitialNPCCount; i++)
 			SpawnNPC();
 
-		// PASSIVE FISH
 		for (int i = 0; i < InitialPassiveFishCount; i++)
 			SpawnPassiveFish();
 
-		// COINS
 		for (int i = 0; i < InitialCoinCount; i++)
 			SpawnCoin();
 	}
@@ -477,30 +519,40 @@ public partial class Main : Node2D
 		if (spawnPos == null)
 			return;
 
-		PickupItem item = type.Value == ItemType.Alcohol
-			? AlcoholItemScene.Instantiate<PickupItem>()
-			: ChorusFruitItemScene.Instantiate<PickupItem>();
-
+		PickupItem item = InstantiateItem(type.Value);
 		item.Type = type.Value;
 		item.Position = spawnPos.Value;
 		ItemContainer.AddChild(item);
 	}
 
+	private PickupItem InstantiateItem(ItemType type)
+	{
+		return type switch
+		{
+			ItemType.Alcohol => AlcoholItemScene.Instantiate<PickupItem>(),
+			ItemType.ChorusFruit => ChorusFruitItemScene.Instantiate<PickupItem>(),
+			ItemType.Trash => TrashItemScene.Instantiate<PickupItem>(),
+			_ => TrashItemScene.Instantiate<PickupItem>(),
+		};
+	}
+
 	private ItemType? PickRandomItemType()
 	{
-		bool canAlcohol = currentLevel >= MinAlcoholLevel;
-		bool canChorus = currentLevel >= MinChorusFruitLevel;
+		var pool = new List<ItemType>();
 
-		if (!canAlcohol && !canChorus)
+		if (currentLevel >= MinChorusFruitLevel)
+			pool.Add(ItemType.ChorusFruit);
+
+		if (currentLevel >= MinTrashLevel)
+			pool.Add(ItemType.Trash);
+
+		if (currentLevel >= MinAlcoholLevel)
+			pool.Add(ItemType.Alcohol);
+
+		if (pool.Count == 0)
 			return null;
 
-		if (canAlcohol && canChorus)
-			return GD.Randf() < 0.5f ? ItemType.Alcohol : ItemType.ChorusFruit;
-
-		if (canChorus)
-			return ItemType.ChorusFruit;
-
-		return ItemType.Alcohol;
+		return pool[(int)(GD.Randi() % pool.Count)];
 	}
 
 	private int CountLiveItems()
@@ -564,7 +616,17 @@ public partial class Main : Node2D
 			case ItemType.ChorusFruit:
 				ApplyChorusFruitEffect();
 				break;
+			case ItemType.Trash:
+				ApplyTrashEffect();
+				break;
 		}
+	}
+
+	private void ApplyTrashEffect()
+	{
+		Player.ApplySlow(TrashSlowMultiplier, TrashSlowDuration);
+		ShowLevelNotice("Muell: du schwimmst langsamer!");
+		UpdateItemEffectLabel();
 	}
 
 	private void ApplyAlcoholEffect()
@@ -692,6 +754,14 @@ public partial class Main : Node2D
 		{
 			ItemEffectLabel.Text =
 				$"Unverwundbar: {invincibilityTimer:0.0}s";
+			ItemEffectLabel.Show();
+			return;
+		}
+
+		if (Player.SpeedMultiplier < 0.99f)
+		{
+			ItemEffectLabel.Text =
+				$"Verlangsamt: {Player.SpeedMultiplier * 100f:0}% Tempo";
 			ItemEffectLabel.Show();
 			return;
 		}
@@ -900,26 +970,39 @@ public partial class Main : Node2D
 	private void SetDifficultyLevel(int level)
 	{
 		currentLevel = level;
+		ApplyLevelSettings(level, true);
+	}
 
-		if (level == 2)
+	private void ApplyLevelSettings(int level, bool showNotice)
+	{
+		if (level >= 2)
 		{
-			TargetNPCCount += 3;
-			TargetPassiveFishCount += 3;
-			TargetObstacleCount += 2;
-			SpawnCheckInterval = Mathf.Max(0.22f, SpawnCheckInterval - 0.08f);
+			TargetNPCCount = 10;
+			TargetPassiveFishCount = 17;
+			TargetObstacleCount = 12;
+			SpawnCheckInterval = 0.22f;
 			ApplySpeedMultiplier(1.18f, 1.1f);
-			ScheduleLevelSwarm(3);
-			ShowLevelNotice("LvL 2 erreicht");
+
+			if (showNotice)
+			{
+				ScheduleLevelSwarm(3);
+				ShowLevelNotice("LvL 2 erreicht");
+			}
 		}
-		else if (level == 3)
+
+		if (level >= 3)
 		{
-			TargetNPCCount += 5;
-			TargetPassiveFishCount += 4;
-			TargetObstacleCount += 3;
-			SpawnCheckInterval = Mathf.Max(0.18f, SpawnCheckInterval - 0.06f);
+			TargetNPCCount = 15;
+			TargetPassiveFishCount = 21;
+			TargetObstacleCount = 15;
+			SpawnCheckInterval = 0.18f;
 			ApplySpeedMultiplier(1.38f, 1.22f);
-			ScheduleLevelSwarm(5);
-			ShowLevelNotice("LvL 3 erreicht");
+
+			if (showNotice)
+			{
+				ScheduleLevelSwarm(5);
+				ShowLevelNotice("LvL 3 erreicht");
+			}
 		}
 	}
 
@@ -1156,7 +1239,10 @@ public partial class Main : Node2D
 
 		gameOverTriggered = true;
 		gameStarted = false;
-		GetNode<ScoreManager>("/root/ScoreManager").StopScoring();
+
+		var sm = GetNode<ScoreManager>("/root/ScoreManager");
+		sm.StopScoring();
+		sm.SaveDeathState(Player.GlobalPosition, currentLevel, Stress);
 
 		Player.SetPhysicsProcess(false);
 
@@ -1165,6 +1251,8 @@ public partial class Main : Node2D
 
 		foreach (Node node in PassiveFishContainer.GetChildren())
 			node.SetPhysicsProcess(false);
+
+		invincibilityTimer = 0f;
 
 		SceneTransition.FadeToScene(
 			GetTree(),

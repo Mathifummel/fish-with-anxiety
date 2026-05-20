@@ -20,6 +20,12 @@ public partial class ScoreManager : Node
 	public int CurrentScore = 0;
 	public bool IsRunning = false;
 
+	public const int RevivalCost = 120;
+	public bool PendingRevival = false;
+	public Vector2 SavedPlayerPosition = Vector2.Zero;
+	public int SavedLevel = 1;
+	public float SavedStress = 25f;
+
 	private const string SavePath =
 		"user://highscores.json";
 	private const string CoinSavePath =
@@ -85,6 +91,35 @@ public partial class ScoreManager : Node
 	public void StopScoring()
 	{
 		IsRunning = false;
+	}
+
+	public void SaveDeathState(Vector2 playerPosition, int level, float stress)
+	{
+		SavedPlayerPosition = playerPosition;
+		SavedLevel = level;
+		SavedStress = stress;
+		PendingRevival = false;
+	}
+
+	public bool CanAffordRevival()
+	{
+		return TotalCoins >= RevivalCost;
+	}
+
+	public bool TryPurchaseRevival()
+	{
+		if (!CanAffordRevival())
+			return false;
+
+		TotalCoins -= RevivalCost;
+		SaveTotalCoins();
+		PendingRevival = true;
+		return true;
+	}
+
+	public void ClearRevivalState()
+	{
+		PendingRevival = false;
 	}
 
 	private void SaveTotalCoins()

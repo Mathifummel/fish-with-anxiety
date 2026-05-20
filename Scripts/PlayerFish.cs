@@ -81,8 +81,10 @@ public partial class PlayerFish : CharacterBody2D
 	public bool IsBoosting = false;
 	public float CurrentStress = 0f;
 	public bool IsInvincible = false;
+	public float SpeedMultiplier = 1f;
 
 	private Sprite2D fishSprite;
+	private float slowTimer = 0f;
 	private float swimTime = 0f;
 
 	// smoother movement
@@ -138,7 +140,18 @@ public partial class PlayerFish : CharacterBody2D
 
 		IsBoosting = false;
 
-		float targetSpeed = Speed;
+		if (slowTimer > 0f)
+		{
+			slowTimer -= dt;
+
+			if (slowTimer <= 0f)
+			{
+				slowTimer = 0f;
+				SpeedMultiplier = 1f;
+			}
+		}
+
+		float targetSpeed = Speed * SpeedMultiplier;
 
 		// =========================================
 		// BOOST START
@@ -298,6 +311,12 @@ public partial class PlayerFish : CharacterBody2D
 			return 0f;
 
 		return currentStressDrain;
+	}
+
+	public void ApplySlow(float multiplier, float duration)
+	{
+		SpeedMultiplier = multiplier;
+		slowTimer = duration;
 	}
 
 	public void SetInvincible(bool active)

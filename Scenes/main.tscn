@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" uid="uid://b3kybybh17bm4" path="res://Scenes/koralle.tscn" id="5_344ge"]
 [ext_resource type="PackedScene" uid="uid://c8itemalk001" path="res://Scenes/item_alcohol.tscn" id="6_alc"]
 [ext_resource type="PackedScene" uid="uid://c8itemchor001" path="res://Scenes/item_chorusfruit.tscn" id="7_chr"]
+[ext_resource type="PackedScene" uid="uid://c8itemtrsh001" path="res://Scenes/item_trash.tscn" id="8_trsh"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_8gbba"]
 
@@ -25,6 +26,7 @@ ObstacleScene = ExtResource("5_344ge")
 ItemContainer = NodePath("ItemContainer")
 AlcoholItemScene = ExtResource("6_alc")
 ChorusFruitItemScene = ExtResource("7_chr")
+TrashItemScene = ExtResource("8_trsh")
 
 [node name="ObstacleContainer" type="Node2D" parent="." unique_id=1222665728]
 
