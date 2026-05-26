@@ -71,9 +71,10 @@ public partial class Main : Node2D
 	[Export] public float DirectionalEnemySpawnDistance = 980f;
 	[Export] public float DirectionalEnemySpawnSpread = 380f;
 	[Export] public float CrossingFishChance = 0.28f;
-	[Export] public float SwarmSpawnDistance = 760f;
-	[Export] public float SwarmSpacing = 76f;
-	[Export] public float SwarmSpawnDelay = 2.1f;
+	[Export] public float SwarmSpawnDistance = 920f;
+	[Export] public float SwarmSpacing = 126f;
+	[Export] public float SwarmSpawnDelay = 2.8f;
+	[Export] public int LevelThreeRampScoreStep = 1300;
 
 	[Export] public int MinAlcoholLevel = 3;
 	[Export] public int MinChorusFruitLevel = 2;
@@ -87,6 +88,11 @@ public partial class Main : Node2D
 	[Export] public float NpcFleeSpeedMultiplier = 1.35f;
 	[Export] public float ChorusTeleportDistance = 760f;
 	[Export] public float ChorusMinEnemyDistance = 420f;
+	[Export] public float ItemHintMinDelay = 8f;
+	[Export] public float ItemHintMaxDelay = 16f;
+	[Export] public float ItemHintDuration = 1.65f;
+	[Export] public float ItemHintChance = 0.62f;
+	[Export] public float ItemHintScreenRadius = 145f;
 
 	public bool ShouldNpcsFlee => invincibilityTimer > 0f;
 
@@ -96,6 +102,8 @@ public partial class Main : Node2D
 	private Label CountdownLabel;
 	private Label LevelNoticeLabel;
 	private Label ItemEffectLabel;
+	private TextureRect ItemHintArrow;
+	private Label ItemHintText;
 	private float invincibilityTimer = 0f;
 
 	private float Stress = 0f;
@@ -105,6 +113,8 @@ public partial class Main : Node2D
 	private Vector2 lastStreamPosition = Vector2.Zero;
 	private int currentLevel = 1;
 	private float levelNoticeTimer = 0f;
+	private float itemHintCooldown = 0f;
+	private float itemHintTimer = 0f;
 	private float npcSpeedMultiplier = 1f;
 	private float passiveSpeedMultiplier = 1f;
 	private int pendingSwarmCount = 0;
@@ -129,6 +139,7 @@ public partial class Main : Node2D
 		CreateCountdownLabel();
 		CreateLevelNoticeLabel();
 		CreateItemEffectLabel();
+		CreateItemDirectionHint();
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 
@@ -149,6 +160,9 @@ public partial class Main : Node2D
 		gameOverTriggered = false;
 		currentLevel = 1;
 		Stress = 0f;
+		itemHintTimer = 0f;
+		ResetItemHintCooldown();
+		HideItemDirectionHint();
 
 		SpawnInitialWorld();
 	}
@@ -170,6 +184,9 @@ public partial class Main : Node2D
 		Player.SpeedMultiplier = 1f;
 		Player.SetPhysicsProcess(true);
 		CountdownLabel?.Hide();
+		itemHintTimer = 0f;
+		ResetItemHintCooldown();
+		HideItemDirectionHint();
 
 		ApplyLevelSettings(currentLevel, false);
 		SpawnInitialWorld();
@@ -205,7 +222,7 @@ public partial class Main : Node2D
 
 			CountdownLabel.Text = number > 0 ? number.ToString() : "GO!";
 			ScoreLabel.Text = "Score: 0";
-			CoinLabel.Text = "Muenzen: 0";
+			CoinLabel.Text = "Münzen: 0";
 
 			if (countdownTimer <= 0f)
 				StartGame();
@@ -216,11 +233,12 @@ public partial class Main : Node2D
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 
 		ScoreLabel.Text = $"Score: {sm.CurrentScore}";
-		CoinLabel.Text = $"Muenzen: {sm.CoinsThisRun}";
+		CoinLabel.Text = $"Münzen: {sm.CoinsThisRun}";
 		UpdateDifficulty(sm.CurrentScore);
 		UpdatePendingSwarm(dt);
 		UpdateLevelNotice(dt);
 		UpdateItemEffects(dt);
+		UpdateItemDirectionHint(dt);
 		UpdateWorldStreaming(dt);
 	}
 
@@ -412,7 +430,7 @@ public partial class Main : Node2D
 
 	void SpawnNPC()
 	{
-		if (gameStarted && currentLevel >= 2 && GD.Randf() < CrossingFishChance)
+		if (gameStarted && currentLevel >= 2 && GD.Randf() < GetCrossingFishChance())
 		{
 			SpawnCrossingNPC();
 			return;
@@ -447,7 +465,7 @@ public partial class Main : Node2D
 		npc.CrossingDirection =
 			(-side * sideSign + forward * (float)GD.RandRange(-0.15f, 0.35f)).Normalized();
 		npc.CrossingLifetime = (float)GD.RandRange(4.2f, 6.2f);
-		npc.Speed *= npcSpeedMultiplier * (1.75f + currentLevel * 0.12f);
+		npc.Speed *= npcSpeedMultiplier * GetCrossingEnemySpeedBoost();
 		npc.SetPhysicsProcess(gameStarted);
 
 		NPCContainer.AddChild(npc);
@@ -523,6 +541,13 @@ public partial class Main : Node2D
 		item.Type = type.Value;
 		item.Position = spawnPos.Value;
 		ItemContainer.AddChild(item);
+
+		if (itemHintTimer <= 0f && GD.Randf() < 0.35f)
+		{
+			itemHintTimer = ItemHintDuration;
+			PositionItemDirectionHint(item);
+			ShowItemDirectionHint();
+		}
 	}
 
 	private PickupItem InstantiateItem(ItemType type)
@@ -625,7 +650,7 @@ public partial class Main : Node2D
 	private void ApplyTrashEffect()
 	{
 		Player.ApplySlow(TrashSlowMultiplier, TrashSlowDuration);
-		ShowLevelNotice("Muell: du schwimmst langsamer!");
+		ShowLevelNotice("Müll: du schwimmst langsamer!");
 		UpdateItemEffectLabel();
 	}
 
@@ -745,6 +770,36 @@ public partial class Main : Node2D
 		GetNode<CanvasLayer>("UI").AddChild(ItemEffectLabel);
 	}
 
+	private void CreateItemDirectionHint()
+	{
+		ItemHintArrow = new TextureRect();
+		ItemHintArrow.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Richtungszeiger.png");
+		ItemHintArrow.CustomMinimumSize = new Vector2(96f, 58f);
+		ItemHintArrow.PivotOffset = new Vector2(48f, 29f);
+		ItemHintArrow.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		ItemHintArrow.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		ItemHintArrow.MouseFilter = Control.MouseFilterEnum.Ignore;
+		ItemHintArrow.Modulate = new Color(1f, 1f, 1f, 0.92f);
+		ItemHintArrow.Hide();
+
+		ItemHintText = new Label();
+		ItemHintText.Text = "Item";
+		ItemHintText.CustomMinimumSize = new Vector2(76f, 22f);
+		ItemHintText.HorizontalAlignment = HorizontalAlignment.Center;
+		ItemHintText.MouseFilter = Control.MouseFilterEnum.Ignore;
+		ItemHintText.AddThemeFontSizeOverride("font_size", 15);
+		ItemHintText.AddThemeColorOverride("font_color", new Color(0.95f, 1f, 0.86f, 0.9f));
+		ItemHintText.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.72f));
+		ItemHintText.AddThemeConstantOverride("shadow_offset_x", 2);
+		ItemHintText.AddThemeConstantOverride("shadow_offset_y", 2);
+		ItemHintText.Hide();
+
+		CanvasLayer ui = GetNode<CanvasLayer>("UI");
+		ui.AddChild(ItemHintArrow);
+		ui.AddChild(ItemHintText);
+		ResetItemHintCooldown();
+	}
+
 	private void UpdateItemEffectLabel()
 	{
 		if (ItemEffectLabel == null)
@@ -769,9 +824,120 @@ public partial class Main : Node2D
 		ItemEffectLabel.Hide();
 	}
 
+	private void UpdateItemDirectionHint(float dt)
+	{
+		if (ItemHintArrow == null)
+			return;
+
+		if (!gameStarted)
+		{
+			HideItemDirectionHint();
+			return;
+		}
+
+		if (itemHintTimer > 0f)
+		{
+			itemHintTimer -= dt;
+			Node2D nearest = FindNearestItem();
+
+			if (nearest == null || itemHintTimer <= 0f)
+			{
+				itemHintTimer = 0f;
+				HideItemDirectionHint();
+				return;
+			}
+
+			PositionItemDirectionHint(nearest);
+			ShowItemDirectionHint();
+			return;
+		}
+
+		itemHintCooldown -= dt;
+
+		if (itemHintCooldown > 0f)
+			return;
+
+		ResetItemHintCooldown();
+
+		if (GD.Randf() > ItemHintChance)
+			return;
+
+		Node2D item = FindNearestItem();
+
+		if (item == null)
+			return;
+
+		itemHintTimer = ItemHintDuration;
+		PositionItemDirectionHint(item);
+		ShowItemDirectionHint();
+	}
+
+	private void PositionItemDirectionHint(Node2D item)
+	{
+		Vector2 direction = item.GlobalPosition - Player.GlobalPosition;
+
+		if (direction.LengthSquared() < 0.01f)
+			direction = Vector2.Right;
+
+		direction = direction.Normalized();
+		Vector2 viewport = GetViewportRect().Size;
+		float radius = Mathf.Min(ItemHintScreenRadius, Mathf.Min(viewport.X, viewport.Y) * 0.31f);
+		Vector2 arrowCenter = viewport * 0.5f + direction * radius;
+
+		ItemHintArrow.Position = arrowCenter - new Vector2(48f, 29f);
+		ItemHintArrow.Rotation = direction.Angle();
+		ItemHintArrow.Modulate = new Color(1f, 1f, 1f, Mathf.Clamp(itemHintTimer, 0f, 1f));
+
+		ItemHintText.Position = arrowCenter + new Vector2(-38f, 30f);
+		ItemHintText.Modulate = ItemHintArrow.Modulate;
+	}
+
+	private Node2D FindNearestItem()
+	{
+		if (ItemContainer == null)
+			return null;
+
+		Node2D nearest = null;
+		float nearestDistance = float.MaxValue;
+
+		foreach (Node child in ItemContainer.GetChildren())
+		{
+			if (child is not Node2D item || item.IsQueuedForDeletion())
+				continue;
+
+			float distance = Player.GlobalPosition.DistanceSquaredTo(item.GlobalPosition);
+
+			if (distance >= nearestDistance)
+				continue;
+
+			nearestDistance = distance;
+			nearest = item;
+		}
+
+		return nearest;
+	}
+
+	private void ShowItemDirectionHint()
+	{
+		ItemHintArrow?.Show();
+		ItemHintText?.Show();
+	}
+
+	private void HideItemDirectionHint()
+	{
+		ItemHintArrow?.Hide();
+		ItemHintText?.Hide();
+	}
+
+	private void ResetItemHintCooldown()
+	{
+		itemHintCooldown = (float)GD.RandRange(ItemHintMinDelay, ItemHintMaxDelay);
+	}
+
 	private Vector2 GetSafeSpawnPosition(bool preferChaseAngle = false)
 	{
-		Vector2 fallback = Player.Position + Vector2.Right * MinSpawnDistance;
+		Vector2 fallback = Player.Position + Vector2.Right * MaxSpawnDistance;
+		float bestClearance = -1f;
 
 		for (int i = 0; i < MaxSpawnAttempts; i++)
 		{
@@ -782,7 +948,12 @@ public partial class Main : Node2D
 			if (IsSpawnPositionSafe(candidate))
 				return candidate;
 
-			fallback = candidate;
+			float clearance = GetSpawnClearance(candidate);
+			if (clearance > bestClearance)
+			{
+				bestClearance = clearance;
+				fallback = candidate;
+			}
 		}
 
 		return fallback;
@@ -798,6 +969,7 @@ public partial class Main : Node2D
 		Vector2 fallback =
 			Player.Position +
 			forward * DirectionalEnemySpawnDistance;
+		float bestClearance = -1f;
 
 		for (int i = 0; i < MaxSpawnAttempts; i++)
 		{
@@ -817,7 +989,13 @@ public partial class Main : Node2D
 			if (IsSpawnPositionSafe(candidate))
 				return candidate;
 
-			fallback = candidate;
+			float clearance = GetSpawnClearance(candidate);
+			if (candidate.DistanceTo(Player.Position) >= MinSpawnDistance &&
+				clearance > bestClearance)
+			{
+				bestClearance = clearance;
+				fallback = candidate;
+			}
 		}
 
 		return fallback;
@@ -834,12 +1012,34 @@ public partial class Main : Node2D
 	private float GetNewEnemySpeedBoost()
 	{
 		if (currentLevel >= 3)
-			return 1.2f;
+			return 1.16f;
 
 		if (currentLevel >= 2)
-			return 1.12f;
+			return 1.07f;
 
 		return 1f;
+	}
+
+	private float GetCrossingFishChance()
+	{
+		if (currentLevel == 2)
+			return CrossingFishChance * 0.45f;
+
+		if (currentLevel == 3)
+			return CrossingFishChance * 0.68f;
+
+		return CrossingFishChance;
+	}
+
+	private float GetCrossingEnemySpeedBoost()
+	{
+		if (currentLevel == 2)
+			return 1.38f;
+
+		if (currentLevel == 3)
+			return 1.65f;
+
+		return 1.65f + (currentLevel - 3) * 0.08f;
 	}
 
 	private float GetSpawnAngle(bool preferChaseAngle, int attempt)
@@ -870,6 +1070,16 @@ public partial class Main : Node2D
 		}
 
 		return true;
+	}
+
+	private float GetSpawnClearance(Vector2 candidate)
+	{
+		float clearance = float.MaxValue;
+
+		foreach (Node2D node in GetAllStreamedNodes())
+			clearance = Mathf.Min(clearance, candidate.DistanceTo(node.Position));
+
+		return clearance == float.MaxValue ? MaxSpawnDistance : clearance;
 	}
 
 	private List<Node2D> GetAllStreamedNodes()
@@ -965,6 +1175,9 @@ public partial class Main : Node2D
 
 		if (currentLevel < 3 && score >= 4500)
 			SetDifficultyLevel(3);
+
+		if (currentLevel >= 3)
+			ApplyLevelThreeRamp(GetLevelThreeRampStep(score));
 	}
 
 	private void SetDifficultyLevel(int level)
@@ -977,33 +1190,58 @@ public partial class Main : Node2D
 	{
 		if (level >= 2)
 		{
-			TargetNPCCount = 10;
-			TargetPassiveFishCount = 17;
-			TargetObstacleCount = 12;
-			SpawnCheckInterval = 0.22f;
-			ApplySpeedMultiplier(1.18f, 1.1f);
+			TargetNPCCount = 8;
+			TargetPassiveFishCount = 15;
+			TargetObstacleCount = 11;
+			MinSpawnSpacing = 190f;
+			SpawnCheckInterval = 0.29f;
+			ApplySpeedMultiplier(1.12f, 1.05f);
 
 			if (showNotice)
 			{
-				ScheduleLevelSwarm(3);
 				ShowLevelNotice("LvL 2 erreicht");
 			}
 		}
 
 		if (level >= 3)
 		{
-			TargetNPCCount = 15;
-			TargetPassiveFishCount = 21;
-			TargetObstacleCount = 15;
-			SpawnCheckInterval = 0.18f;
-			ApplySpeedMultiplier(1.38f, 1.22f);
+			ApplyLevelThreeRamp(0);
 
 			if (showNotice)
 			{
-				ScheduleLevelSwarm(5);
+				ScheduleLevelSwarm(3);
 				ShowLevelNotice("LvL 3 erreicht");
 			}
 		}
+	}
+
+	private int GetLevelThreeRampStep(int score)
+	{
+		int stepSize = LevelThreeRampScoreStep < 1 ? 1 : LevelThreeRampScoreStep;
+		int rampStep = (score - 4500) / stepSize;
+
+		if (rampStep < 0)
+			return 0;
+
+		if (rampStep > 3)
+			return 3;
+
+		return rampStep;
+	}
+
+	private void ApplyLevelThreeRamp(int rampStep)
+	{
+		float ramp = rampStep / 3f;
+
+		TargetNPCCount = 10 + rampStep;
+		TargetPassiveFishCount = 17 + rampStep;
+		TargetObstacleCount = 12 + (rampStep < 2 ? rampStep : 2);
+		MinSpawnSpacing = Mathf.Lerp(230f, 210f, ramp);
+		SpawnCheckInterval = Mathf.Lerp(0.25f, 0.22f, ramp);
+		ApplySpeedMultiplier(
+			Mathf.Lerp(1.24f, 1.36f, ramp),
+			Mathf.Lerp(1.12f, 1.18f, ramp)
+		);
 	}
 
 	private void ScheduleLevelSwarm(int count)
@@ -1046,9 +1284,9 @@ public partial class Main : Node2D
 
 			npc.Position = center + offset;
 			npc.Player = Player;
-			npc.Speed *= npcSpeedMultiplier * 1.18f;
-			npc.ApproachOffsetStrength *= 1.35f;
-			npc.SeparationRadius *= 0.82f;
+			npc.Speed *= npcSpeedMultiplier * 1.14f;
+			npc.ApproachOffsetStrength *= 1.15f;
+			npc.SeparationRadius *= 1.18f;
 			npc.SetPhysicsProcess(gameStarted);
 
 			NPCContainer.AddChild(npc);
@@ -1253,6 +1491,7 @@ public partial class Main : Node2D
 			node.SetPhysicsProcess(false);
 
 		invincibilityTimer = 0f;
+		HideItemDirectionHint();
 
 		SceneTransition.FadeToScene(
 			GetTree(),

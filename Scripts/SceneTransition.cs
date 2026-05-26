@@ -12,14 +12,14 @@ public static class SceneTransition
 		if (transitionActive || tree == null)
 			return;
 
-		ColorRect overlay = CreateOverlay(tree.Root, new Color(0f, 0.02f, 0.04f, 1f));
+		ColorRect overlay = await CreateOverlay(tree.Root, new Color(0f, 0.02f, 0.04f, 1f));
 		Tween tween = tree.CreateTween();
 		tween.TweenProperty(overlay, "color:a", 0f, duration)
 			.SetTrans(Tween.TransitionType.Sine)
 			.SetEase(Tween.EaseType.Out);
 
 		await overlay.ToSignal(tween, Tween.SignalName.Finished);
-		overlay.GetParent().QueueFree();
+		overlay.GetParent()?.QueueFree();
 	}
 
 	public static async void FadeToScene(SceneTree tree, string scenePath, float duration = 0.34f)
@@ -29,7 +29,7 @@ public static class SceneTransition
 
 		transitionActive = true;
 
-		ColorRect overlay = CreateOverlay(tree.Root, new Color(0f, 0.02f, 0.04f, 0f));
+		ColorRect overlay = await CreateOverlay(tree.Root, new Color(0f, 0.02f, 0.04f, 0f));
 		Tween fadeOut = tree.CreateTween();
 		fadeOut.TweenProperty(overlay, "color:a", 1f, duration)
 			.SetTrans(Tween.TransitionType.Sine)
@@ -45,16 +45,15 @@ public static class SceneTransition
 			.SetEase(Tween.EaseType.Out);
 
 		await overlay.ToSignal(fadeIn, Tween.SignalName.Finished);
-		overlay.GetParent().QueueFree();
+		overlay.GetParent()?.QueueFree();
 		transitionActive = false;
 	}
 
-	private static ColorRect CreateOverlay(Window root, Color color)
+	private static async Task<ColorRect> CreateOverlay(Window root, Color color)
 	{
 		CanvasLayer transitionLayer = new CanvasLayer();
 		transitionLayer.Name = "SceneTransitionLayer";
 		transitionLayer.Layer = 4096;
-		root.AddChild(transitionLayer);
 
 		ColorRect overlay = new ColorRect();
 		overlay.Name = "SceneFadeOverlay";
@@ -62,6 +61,9 @@ public static class SceneTransition
 		overlay.MouseFilter = Control.MouseFilterEnum.Stop;
 		transitionLayer.AddChild(overlay);
 		overlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+
+		root.CallDeferred(Node.MethodName.AddChild, transitionLayer);
+		await root.ToSignal(root.GetTree(), SceneTree.SignalName.ProcessFrame);
 		return overlay;
 	}
 }

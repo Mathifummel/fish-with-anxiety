@@ -107,7 +107,7 @@ public partial class Leaderboard : Control
 		buttons.AddThemeConstantOverride("separation", 12);
 		content.AddChild(buttons);
 
-		Button backButton = CreateButton("Zurueck");
+		Button backButton = CreateButton("Zurück");
 		backButton.Pressed += OnBackButtonPressed;
 		buttons.AddChild(backButton);
 

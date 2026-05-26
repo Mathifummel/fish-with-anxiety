@@ -50,7 +50,7 @@ public static class BackdropFishSwim
 		out Vector2 tangent)
 	{
 		GetEndpoints(path, viewport, out Vector2 start, out Vector2 end);
-		float t = Mathf.Clamp(progress, 0f, 1f);
+		float t = progress;
 		Vector2 core = start.Lerp(end, t);
 		Vector2 direction = (end - start).Normalized();
 		Vector2 perpendicular = new Vector2(-direction.Y, direction.X);
@@ -69,9 +69,29 @@ public static class BackdropFishSwim
 		Vector2 delta = currentPosition - previousPosition;
 
 		if (delta.LengthSquared() > 0.25f)
-			return delta.Angle() + Mathf.Pi;
+			return GetUprightRotation(delta);
 
-		return fallbackTangent.Angle() + Mathf.Pi;
+		return GetUprightRotation(fallbackTangent);
+	}
+
+	public static float GetUprightRotation(Vector2 direction)
+	{
+		if (direction.LengthSquared() < 0.0001f)
+			return 0f;
+
+		float angle = direction.Angle();
+		return direction.X >= 0f
+			? angle
+			: Mathf.Wrap(angle - Mathf.Pi, -Mathf.Pi, Mathf.Pi);
+	}
+
+	public static void ApplyUprightRotation(Sprite2D fish, Vector2 direction, float extraRotation = 0f)
+	{
+		if (fish == null || direction.LengthSquared() < 0.0001f)
+			return;
+
+		fish.FlipH = direction.X >= 0f;
+		fish.Rotation = GetUprightRotation(direction) + extraRotation;
 	}
 
 	public static void PlaceFollowersOnPath(
@@ -89,7 +109,7 @@ public static class BackdropFishSwim
 
 		for (int i = 0; i < followers.Length; i++)
 		{
-			float lagT = Mathf.Max(0f, leaderProgress - progressLagStep * (i + 1));
+			float lagT = leaderProgress - progressLagStep * (i + 1);
 			float lane = (i - (followers.Length - 1) * 0.5f) * laneSpread;
 			float phase = wobblePhase - i * 0.35f;
 
@@ -113,7 +133,7 @@ public static class BackdropFishSwim
 				wobbleStrength,
 				out _
 			);
-			followers[i].Rotation = GetLeaderRotation(followerPos, lookAheadPos, tangent);
+			ApplyUprightRotation(followers[i], lookAheadPos - followerPos);
 		}
 	}
 
@@ -146,8 +166,12 @@ public static class BackdropFishSwim
 				sideDirection * lane +
 				new Vector2(0f, wave);
 
-			followers[i].Rotation =
-				leaderRotation + Mathf.Sin(wobblePhase * 1.8f + i) * 0.08f;
+			Vector2 followerDirection = leaderTangent;
+			ApplyUprightRotation(
+				followers[i],
+				followerDirection,
+				Mathf.Sin(wobblePhase * 1.8f + i) * 0.08f
+			);
 		}
 	}
 

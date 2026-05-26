@@ -16,6 +16,7 @@ public partial class PassiveFish : CharacterBody2D
 	private float directionTimer = 0f;
 	private float swimTime = 0f;
 	private float wanderPhase = 0f;
+	private int facingDirection = -1;
 
 	private Sprite2D fishSprite;
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
@@ -52,7 +53,13 @@ public partial class PassiveFish : CharacterBody2D
 		{
 			swimTime += dt;
 
-			float targetRotation = Velocity.Angle() + Mathf.Pi;
+			UpdateFacingDirection();
+
+			float moveAngle = Velocity.Angle();
+			float targetRotation =
+				facingDirection > 0
+					? moveAngle
+					: Mathf.Wrap(moveAngle - Mathf.Pi, -Mathf.Pi, Mathf.Pi);
 			float wiggle = Mathf.Sin(swimTime * SwimFrequency) * SwimAmplitude;
 
 			fishSprite.Rotation = Mathf.LerpAngle(
@@ -60,7 +67,16 @@ public partial class PassiveFish : CharacterBody2D
 				targetRotation + wiggle,
 				dt * RotationSpeed
 			);
+			fishSprite.FlipH = facingDirection > 0;
 		}
+	}
+
+	private void UpdateFacingDirection()
+	{
+		if (Velocity.X > 8f)
+			facingDirection = 1;
+		else if (Velocity.X < -8f)
+			facingDirection = -1;
 	}
 
 	private void RandomizeDirection()

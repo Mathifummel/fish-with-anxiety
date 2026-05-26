@@ -13,11 +13,16 @@ public partial class NPCFish : CharacterBody2D
 
 	[Export] public float SwimAmplitude = 0.15f;
 	[Export] public float SwimFrequency = 4f;
+	[Export] public float ShakeAmplitude = 0.08f;
+	[Export] public float BoostShakeAmplitude = 0.17f;
+	[Export] public float ShakeFrequency = 17f;
+	[Export] public float PositionShakePixels = 2.4f;
 
 	// Boost
-	[Export] public float BoostMultiplier = 2.5f;
-	[Export] public float BoostDuration = 1.2f;
-	[Export] public float BoostChance = 0.01f;
+	[Export] public float BoostMultiplier = 1.85f;
+	[Export] public float BoostDuration = 0.82f;
+	[Export] public float BoostChance = 0.3f;
+	[Export] public float BoostCooldown = 1.65f;
 
 	// Separation
 	[Export] public float SeparationRadius = 80f;
@@ -34,8 +39,10 @@ public partial class NPCFish : CharacterBody2D
 
 	private Sprite2D fishSprite;
 	private float swimTime = 0f;
+	private int facingDirection = -1;
 
 	private float boostTimer = 0f;
+	private float boostCooldownTimer = 0f;
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
 
 	public override void _Ready()
@@ -94,10 +101,16 @@ public partial class NPCFish : CharacterBody2D
 
 		separation *= SeparationStrength;
 
-		// Random boost
-		if (rng.Randf() < BoostChance && boostTimer <= 0)
+		if (boostCooldownTimer > 0f)
+			boostCooldownTimer -= dt;
+
+		// Random boost, checked per second so it stays fair at every frame rate.
+		if (rng.Randf() < BoostChance * dt &&
+			boostTimer <= 0f &&
+			boostCooldownTimer <= 0f)
 		{
 			boostTimer = BoostDuration;
+			boostCooldownTimer = BoostCooldown;
 		}
 
 		float currentSpeed = Speed;
@@ -169,14 +182,44 @@ public partial class NPCFish : CharacterBody2D
 		{
 			swimTime += dt;
 
-			float targetRotation = Velocity.Angle() + Mathf.Pi;
+			UpdateFacingDirection();
+
+			float moveAngle = Velocity.Angle();
+			float targetRotation =
+				facingDirection > 0
+					? moveAngle
+					: Mathf.Wrap(moveAngle - Mathf.Pi, -Mathf.Pi, Mathf.Pi);
 			float wiggle = Mathf.Sin(swimTime * SwimFrequency) * SwimAmplitude;
+			float boostAmount = boostTimer > 0f ? 1f : 0f;
+			float shakeStrength = Mathf.Lerp(ShakeAmplitude, BoostShakeAmplitude, boostAmount);
+			float shake =
+				Mathf.Sin(swimTime * ShakeFrequency + GetInstanceId()) * shakeStrength +
+				Mathf.Sin(swimTime * ShakeFrequency * 1.7f) * shakeStrength * 0.35f;
 
 			fishSprite.Rotation = Mathf.LerpAngle(
 				fishSprite.Rotation,
-				targetRotation + wiggle,
+				targetRotation + wiggle + shake,
 				dt * RotationSpeed
 			);
+			fishSprite.FlipH = facingDirection > 0;
+
+			float positionShake = Mathf.Lerp(PositionShakePixels, PositionShakePixels * 2.1f, boostAmount);
+			fishSprite.Position = new Vector2(
+				0f,
+				Mathf.Sin(swimTime * ShakeFrequency * 1.25f + GetInstanceId()) * positionShake
+			);
 		}
+		else
+		{
+			fishSprite.Position = Vector2.Zero;
+		}
+	}
+
+	private void UpdateFacingDirection()
+	{
+		if (Velocity.X > 8f)
+			facingDirection = 1;
+		else if (Velocity.X < -8f)
+			facingDirection = -1;
 	}
 }

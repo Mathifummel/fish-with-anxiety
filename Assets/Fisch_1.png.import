@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://chetg2yiuvuq"
-path="res://.godot/imported/Alkohol.jpeg-e3d9b47d8cbb159ceeafbaea2d14924b.ctex"
+uid="uid://b1qtia1bgqf4v"
+path="res://.godot/imported/Fisch_1.png-978a7cf50fecfffc0fbe247e82f7c1e9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Alkohol.jpeg"
-dest_files=["res://.godot/imported/Alkohol.jpeg-e3d9b47d8cbb159ceeafbaea2d14924b.ctex"]
+source_file="res://Assets/Fisch_1.png"
+dest_files=["res://.godot/imported/Fisch_1.png-978a7cf50fecfffc0fbe247e82f7c1e9.ctex"]
 
 [params]
 

@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://d3nxti7twfqq7"]
 
 [ext_resource type="Script" uid="uid://bjr2bdi1oivhe" path="res://Scripts/PlayerFish.cs" id="1_g8buk"]
-[ext_resource type="Texture2D" uid="uid://bg5orh3isobgq" path="res://Assets/MainCharacter.png" id="2_7mvmx"]
+[ext_resource type="Texture2D" uid="uid://c1077bu6vg2si" path="res://Assets/Fisch_1 1.png" id="2_7mvmx"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_2qh8w"]
 radius = 32.0
@@ -15,7 +15,7 @@ CollisionRadius = 32.0
 shape = SubResource("CircleShape2D_2qh8w")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1274975305]
-scale = Vector2(0.32, 0.32)
+scale = Vector2(1.15, 1.15)
 texture = ExtResource("2_7mvmx")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=975769724]

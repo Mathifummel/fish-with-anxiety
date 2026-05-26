@@ -3,19 +3,31 @@ using System.Collections.Generic;
 
 public partial class MainMenu : Control
 {
+	private ColorRect settingsBackdrop;
 	private Panel settingsPanel;
 	private VBoxContainer customBindings;
 	private Label captureLabel;
+	private Label settingsStatusLabel;
+	private TextureRect confirmationIcon;
+	private Button confirmSettingsButton;
 	private string pendingCustomAction = "";
 	private VideoStreamPlayer backgroundVideo;
 	private Node2D menuFishLayer;
 	private Sprite2D menuPlayerFish;
 	private Sprite2D[] menuNpcFish = new Sprite2D[4];
+	private Texture2D[] menuPlayerLeftFrames;
+	private Texture2D[] menuPlayerRightFrames;
 	private float visualTime = 0f;
+	private float settingsConfirmationTimer = 0f;
 	private FishSwimPath menuSwimPath = FishSwimPath.LeftToRight;
 	private float menuPathProgress = 0f;
 	private Vector2 menuLastLeaderPos = Vector2.Zero;
-	private const float MenuSwimSpeed = 188f;
+	private const float MenuSwimSpeed = 520f;
+	private const float MenuFollowerProgressLag = 0.055f;
+	private const float MenuPathEndPadding = 0.32f;
+	private const float MenuPlayerFrameRate = 10f;
+	private readonly Dictionary<PlayerFish.ControlScheme, Button> modeButtons =
+		new Dictionary<PlayerFish.ControlScheme, Button>();
 	private readonly Dictionary<string, Button> customButtons = new Dictionary<string, Button>();
 
 	public override void _Ready()
@@ -34,6 +46,7 @@ public partial class MainMenu : Control
 		visualTime += (float)delta;
 		AnimateBackground();
 		AnimateMenuFish();
+		UpdateSettingsConfirmation((float)delta);
 	}
 
 	private void SetupMovingBackground()
@@ -84,12 +97,23 @@ public partial class MainMenu : Control
 		int logoIndex = canvas.GetNode("TextureRect").GetIndex();
 		canvas.MoveChild(menuFishLayer, logoIndex);
 
-		menuPlayerFish = CreateMenuFish("res://Assets/MainCharacter.png", new Vector2(0.26f, 0.26f), 5);
+		menuPlayerLeftFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2.png")
+		};
+		menuPlayerRightFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1 1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2 1.png")
+		};
+
+		menuPlayerFish = CreateMenuFish("res://Assets/Fisch_1 1.png", new Vector2(1.12f, 1.12f), 5);
 		menuFishLayer.AddChild(menuPlayerFish);
 
 		for (int i = 0; i < menuNpcFish.Length; i++)
 		{
-			menuNpcFish[i] = CreateMenuFish("res://Assets/EnemyCharacter.png", new Vector2(0.2f, 0.2f), 4 - i);
+			menuNpcFish[i] = CreateMenuFish("res://Assets/EnemyCharacter.png", new Vector2(0.24f, 0.24f), 4 - i);
 			menuFishLayer.AddChild(menuNpcFish[i]);
 		}
 
@@ -124,9 +148,11 @@ public partial class MainMenu : Control
 		float delta = (float)GetProcessDeltaTime();
 		menuPathProgress += delta * MenuSwimSpeed / pathLength;
 
-		if (menuPathProgress >= 1f)
+		float lastFollowerLag = MenuFollowerProgressLag * menuNpcFish.Length;
+
+		if (menuPathProgress >= 1f + lastFollowerLag + MenuPathEndPadding)
 		{
-			menuPathProgress = 0f;
+			menuPathProgress = -lastFollowerLag - 0.08f;
 			menuSwimPath = BackdropFishSwim.PickNextPath(menuSwimPath);
 			menuLastLeaderPos = BackdropFishSwim.SamplePosition(
 				menuSwimPath,
@@ -146,16 +172,15 @@ public partial class MainMenu : Control
 			30f,
 			out Vector2 tangent
 		);
-		float leaderRotation = BackdropFishSwim.GetLeaderRotation(
-			menuLastLeaderPos,
-			leaderPos,
-			tangent
-		);
 		menuLastLeaderPos = leaderPos;
 
 		float panicPulse = 0.5f + Mathf.Sin(visualTime * 3.4f) * 0.5f;
 		menuPlayerFish.Position = leaderPos;
-		menuPlayerFish.Rotation = leaderRotation + Mathf.Sin(visualTime * 2.2f) * 0.05f;
+		UpdateMenuPlayerFrame(tangent);
+		menuPlayerFish.FlipH = false;
+		menuPlayerFish.Rotation =
+			BackdropFishSwim.GetUprightRotation(tangent) +
+			Mathf.Sin(visualTime * 2.2f) * 0.05f;
 		menuPlayerFish.Modulate = new Color(0.98f, 1f, 0.99f, 0.56f + panicPulse * 0.08f);
 
 		BackdropFishSwim.PlaceFollowersOnPath(
@@ -165,7 +190,7 @@ public partial class MainMenu : Control
 			visualTime * 1.75f,
 			28f,
 			menuNpcFish,
-			0.055f,
+			MenuFollowerProgressLag,
 			22f
 		);
 
@@ -173,12 +198,26 @@ public partial class MainMenu : Control
 			menuNpcFish[i].Modulate = new Color(1f, 1f, 1f, 0.62f - i * 0.05f);
 	}
 
+	private void UpdateMenuPlayerFrame(Vector2 tangent)
+	{
+		Texture2D[] frames = tangent.X < 0f ? menuPlayerLeftFrames : menuPlayerRightFrames;
+
+		if (frames == null || frames.Length == 0)
+			return;
+
+		int frameIndex = Mathf.PosMod((int)(visualTime * MenuPlayerFrameRate), frames.Length);
+		Texture2D texture = frames[frameIndex];
+
+		if (texture != null && menuPlayerFish.Texture != texture)
+			menuPlayerFish.Texture = texture;
+	}
+
 	private void CreateCoinCounter()
 	{
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 
 		Label coinLabel = new Label();
-		coinLabel.Text = $"Muenzen: {sm.TotalCoins}";
+		coinLabel.Text = $"Münzen: {sm.TotalCoins}";
 		coinLabel.SetAnchorsPreset(LayoutPreset.TopRight);
 		coinLabel.OffsetLeft = -230;
 		coinLabel.OffsetTop = 18;
@@ -202,44 +241,69 @@ public partial class MainMenu : Control
 
 	private void _on_settings_button_pressed()
 	{
+		settingsBackdrop.Visible = true;
 		settingsPanel.Visible = true;
+		UpdateSettingsStatus();
+		UpdateModeButtonLabels();
 	}
 
 	private void SelectControlScheme(PlayerFish.ControlScheme scheme)
 	{
 		PlayerFish.SetControlScheme(scheme);
 		customBindings.Visible = scheme == PlayerFish.ControlScheme.Custom;
+		UpdateSettingsStatus();
+		UpdateModeButtonLabels();
 		UpdateCustomButtonLabels();
+		ShowSettingsConfirmation("Gespeichert");
 	}
 
 	private void CreateSettingsPanel()
 	{
+		settingsBackdrop = new ColorRect();
+		settingsBackdrop.Visible = false;
+		settingsBackdrop.Color = new Color(0f, 0.03f, 0.05f, 0.52f);
+		settingsBackdrop.MouseFilter = MouseFilterEnum.Stop;
+		settingsBackdrop.SetAnchorsPreset(LayoutPreset.FullRect);
+
 		settingsPanel = new Panel();
 		settingsPanel.Visible = false;
 		settingsPanel.AnchorLeft = 0.5f;
 		settingsPanel.AnchorTop = 0.5f;
 		settingsPanel.AnchorRight = 0.5f;
 		settingsPanel.AnchorBottom = 0.5f;
-		settingsPanel.OffsetLeft = -190;
-		settingsPanel.OffsetTop = -230;
-		settingsPanel.OffsetRight = 190;
-		settingsPanel.OffsetBottom = 230;
+		settingsPanel.OffsetLeft = -235;
+		settingsPanel.OffsetTop = -285;
+		settingsPanel.OffsetRight = 235;
+		settingsPanel.OffsetBottom = 285;
+		settingsPanel.AddThemeStyleboxOverride(
+			"panel",
+			CreatePanelStyle(new Color(0.02f, 0.12f, 0.17f, 0.96f))
+		);
 
 		VBoxContainer layout = new VBoxContainer();
 		layout.AnchorRight = 1f;
 		layout.AnchorBottom = 1f;
-		layout.OffsetLeft = 24;
+		layout.OffsetLeft = 28;
 		layout.OffsetTop = 24;
-		layout.OffsetRight = -24;
+		layout.OffsetRight = -28;
 		layout.OffsetBottom = -24;
-		layout.AddThemeConstantOverride("separation", 10);
+		layout.AddThemeConstantOverride("separation", 9);
 		settingsPanel.AddChild(layout);
 
 		Label title = new Label();
-		title.Text = "Steuerung";
+		title.Text = "Einstellungen";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
-		title.AddThemeFontSizeOverride("font_size", 26);
+		title.AddThemeFontSizeOverride("font_size", 28);
+		title.AddThemeColorOverride("font_color", new Color(0.92f, 1f, 0.98f));
+		title.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.55f));
+		title.AddThemeConstantOverride("shadow_offset_y", 2);
 		layout.AddChild(title);
+
+		Label sectionLabel = new Label();
+		sectionLabel.Text = "Steuerung";
+		sectionLabel.AddThemeFontSizeOverride("font_size", 17);
+		sectionLabel.AddThemeColorOverride("font_color", new Color(0.67f, 0.9f, 0.96f));
+		layout.AddChild(sectionLabel);
 
 		AddModeButton(layout, "Pfeiltasten", PlayerFish.ControlScheme.ArrowKeys);
 		AddModeButton(layout, "WASD", PlayerFish.ControlScheme.WASD);
@@ -260,43 +324,207 @@ public partial class MainMenu : Control
 		captureLabel = new Label();
 		captureLabel.Text = "";
 		captureLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		captureLabel.AddThemeFontSizeOverride("font_size", 14);
+		captureLabel.AddThemeColorOverride("font_color", new Color(0.96f, 0.88f, 0.52f));
 		layout.AddChild(captureLabel);
 
+		settingsStatusLabel = new Label();
+		settingsStatusLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		settingsStatusLabel.AddThemeFontSizeOverride("font_size", 16);
+		settingsStatusLabel.AddThemeColorOverride("font_color", new Color(0.57f, 1f, 0.74f));
+		layout.AddChild(settingsStatusLabel);
+
+		HBoxContainer confirmRow = new HBoxContainer();
+		confirmRow.AddThemeConstantOverride("separation", 10);
+		layout.AddChild(confirmRow);
+
+		confirmationIcon = new TextureRect();
+		confirmationIcon.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Bestätigung.png");
+		confirmationIcon.CustomMinimumSize = new Vector2(36, 36);
+		confirmationIcon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		confirmationIcon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		confirmationIcon.Hide();
+		confirmRow.AddChild(confirmationIcon);
+
+		confirmSettingsButton = CreateSettingsButton("Bestätigen");
+		confirmSettingsButton.CustomMinimumSize = new Vector2(0, 42);
+		confirmSettingsButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		confirmSettingsButton.Pressed += () =>
+		{
+			PlayerFish.SaveControlSettings();
+			ShowSettingsConfirmation("Bestätigt");
+		};
+		confirmRow.AddChild(confirmSettingsButton);
+
 		Button closeButton = new Button();
-		closeButton.Text = "Zurueck";
+		closeButton.Text = "Zurück";
+		closeButton.CustomMinimumSize = new Vector2(0, 38);
+		ApplyButtonStyle(closeButton, false);
 		closeButton.Pressed += () =>
 		{
 			pendingCustomAction = "";
 			captureLabel.Text = "";
+			settingsBackdrop.Visible = false;
 			settingsPanel.Visible = false;
 		};
 		layout.AddChild(closeButton);
 
-		GetNode<CanvasLayer>("CanvasLayer").AddChild(settingsPanel);
+		CanvasLayer canvas = GetNode<CanvasLayer>("CanvasLayer");
+		canvas.AddChild(settingsBackdrop);
+		canvas.AddChild(settingsPanel);
+		UpdateModeButtonLabels();
 		UpdateCustomButtonLabels();
+		UpdateSettingsStatus();
 	}
 
 	private void AddModeButton(VBoxContainer parent, string text, PlayerFish.ControlScheme scheme)
 	{
-		Button button = new Button();
-		button.Text = text;
+		Button button = CreateSettingsButton(text);
 		button.CustomMinimumSize = new Vector2(0, 36);
 		button.Pressed += () => SelectControlScheme(scheme);
+		modeButtons[scheme] = button;
 		parent.AddChild(button);
 	}
 
 	private void AddCustomBindingButton(string label, string action)
 	{
-		Button button = new Button();
+		Button button = CreateSettingsButton("");
 		button.CustomMinimumSize = new Vector2(0, 32);
 		button.Pressed += () =>
 		{
 			pendingCustomAction = action;
-			captureLabel.Text = $"{label}: Taste oder Mausklick druecken";
+			captureLabel.Text = $"{label}: Taste oder Mausklick drücken";
 		};
 
 		customButtons[action] = button;
 		customBindings.AddChild(button);
+	}
+
+	private Button CreateSettingsButton(string text)
+	{
+		Button button = new Button();
+		button.Text = text;
+		button.FocusMode = FocusModeEnum.None;
+		ApplyButtonStyle(button, false);
+		return button;
+	}
+
+	private void UpdateModeButtonLabels()
+	{
+		foreach (var pair in modeButtons)
+		{
+			bool selected = pair.Key == PlayerFish.CurrentControlScheme;
+			pair.Value.Text = $"{(selected ? "✓ " : "")}{GetControlSchemeName(pair.Key)}";
+			ApplyButtonStyle(pair.Value, selected);
+		}
+	}
+
+	private string GetControlSchemeName(PlayerFish.ControlScheme scheme)
+	{
+		return scheme switch
+		{
+			PlayerFish.ControlScheme.ArrowKeys => "Pfeiltasten",
+			PlayerFish.ControlScheme.WASD => "WASD",
+			PlayerFish.ControlScheme.Mouse => "Maussteuerung",
+			PlayerFish.ControlScheme.Custom => "Eigene Tasten",
+			_ => "Steuerung",
+		};
+	}
+
+	private void ShowSettingsConfirmation(string text)
+	{
+		if (settingsStatusLabel != null)
+			settingsStatusLabel.Text = $"✓ {text}";
+
+		confirmationIcon?.Show();
+
+		if (confirmSettingsButton != null)
+			confirmSettingsButton.Text = "✓ Bestätigt";
+
+		settingsConfirmationTimer = 1.8f;
+	}
+
+	private void UpdateSettingsConfirmation(float dt)
+	{
+		if (settingsConfirmationTimer <= 0f)
+			return;
+
+		settingsConfirmationTimer -= dt;
+
+		if (settingsConfirmationTimer <= 0f)
+			UpdateSettingsStatus();
+	}
+
+	private void UpdateSettingsStatus()
+	{
+		if (settingsStatusLabel != null)
+		{
+			settingsStatusLabel.Text =
+				$"Aktiv: {GetControlSchemeName(PlayerFish.CurrentControlScheme)}";
+		}
+
+		if (confirmSettingsButton != null)
+			confirmSettingsButton.Text = "Bestätigen";
+
+		confirmationIcon?.Hide();
+	}
+
+	private StyleBoxFlat CreatePanelStyle(Color color)
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = color;
+		style.BorderColor = new Color(0.36f, 0.78f, 0.9f, 0.45f);
+		style.BorderWidthLeft = 2;
+		style.BorderWidthTop = 2;
+		style.BorderWidthRight = 2;
+		style.BorderWidthBottom = 2;
+		style.CornerRadiusTopLeft = 8;
+		style.CornerRadiusTopRight = 8;
+		style.CornerRadiusBottomLeft = 8;
+		style.CornerRadiusBottomRight = 8;
+		style.ShadowColor = new Color(0f, 0f, 0f, 0.42f);
+		style.ShadowSize = 16;
+		return style;
+	}
+
+	private void ApplyButtonStyle(Button button, bool selected)
+	{
+		Color normal = selected
+			? new Color(0.07f, 0.34f, 0.31f, 0.96f)
+			: new Color(0.03f, 0.17f, 0.23f, 0.92f);
+		Color hover = selected
+			? new Color(0.1f, 0.45f, 0.4f, 0.98f)
+			: new Color(0.07f, 0.27f, 0.34f, 0.96f);
+		Color pressed = selected
+			? new Color(0.03f, 0.24f, 0.22f, 1f)
+			: new Color(0.02f, 0.11f, 0.16f, 1f);
+
+		button.AddThemeStyleboxOverride("normal", CreateButtonStyle(normal));
+		button.AddThemeStyleboxOverride("hover", CreateButtonStyle(hover));
+		button.AddThemeStyleboxOverride("pressed", CreateButtonStyle(pressed));
+		button.AddThemeColorOverride(
+			"font_color",
+			selected ? new Color(0.92f, 1f, 0.88f) : new Color(0.9f, 0.98f, 1f)
+		);
+		button.AddThemeFontSizeOverride("font_size", 15);
+	}
+
+	private StyleBoxFlat CreateButtonStyle(Color color)
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = color;
+		style.BorderColor = new Color(0.68f, 0.95f, 1f, 0.24f);
+		style.BorderWidthLeft = 1;
+		style.BorderWidthTop = 1;
+		style.BorderWidthRight = 1;
+		style.BorderWidthBottom = 1;
+		style.CornerRadiusTopLeft = 6;
+		style.CornerRadiusTopRight = 6;
+		style.CornerRadiusBottomLeft = 6;
+		style.CornerRadiusBottomRight = 6;
+		style.ContentMarginLeft = 12;
+		style.ContentMarginRight = 12;
+		return style;
 	}
 
 	private void UpdateCustomButtonLabels()
@@ -340,6 +568,7 @@ public partial class MainMenu : Control
 		pendingCustomAction = "";
 		captureLabel.Text = "";
 		UpdateCustomButtonLabels();
+		ShowSettingsConfirmation("Taste gespeichert");
 	}
 
 	// LEADERBOARD
@@ -350,7 +579,7 @@ public partial class MainMenu : Control
 
 	private void _on_credits_button_pressed()
 	{
-		GD.Print("Credits gedrueckt");
+		GD.Print("Credits gedrückt");
 	}
 
 	// QUIT BUTTON

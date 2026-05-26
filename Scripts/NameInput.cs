@@ -304,16 +304,15 @@ public partial class NameInput : Control
 			wobbleStrength,
 			out Vector2 tangent
 		);
-		float leaderRotation = BackdropFishSwim.GetLeaderRotation(
-			deathLastLeaderPos,
-			leaderPos,
-			tangent
-		);
 		deathLastLeaderPos = leaderPos;
 
 		float panic = Mathf.Max(0f, 1f - effectTimer / 1.6f);
 		fallenPlayerFish.Position = leaderPos;
-		fallenPlayerFish.Rotation = leaderRotation - 0.08f + Mathf.Sin(effectTimer * 0.9f) * 0.03f;
+		BackdropFishSwim.ApplyUprightRotation(
+			fallenPlayerFish,
+			tangent,
+			-0.08f + Mathf.Sin(effectTimer * 0.9f) * 0.03f
+		);
 		fallenPlayerFish.Modulate = new Color(0.94f, 0.99f, 0.98f, 0.36f + panic * 0.1f);
 
 		BackdropFishSwim.PlaceFollowersOnPath(

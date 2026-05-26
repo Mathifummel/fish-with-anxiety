@@ -32,6 +32,8 @@ public partial class PlayerFish : CharacterBody2D
 
 	[Export] public float SwimAmplitude = 0.2f;
 	[Export] public float SwimFrequency = 5f;
+	[Export] public float SwimFrameRate = 7.5f;
+	[Export] public float DirectionFlipDeadzone = 12f;
 
 	// =========================================
 	// BOOST ZONES
@@ -63,6 +65,10 @@ public partial class PlayerFish : CharacterBody2D
 
 	[Export] public float BoostCooldown = 1.5f;
 	[Export] public float MinBoostTime = 0.35f;
+	[Export] public float PerfectBoostDuration = 0.9f;
+	[Export] public float NormalBoostDuration = 0.62f;
+	[Export] public float PanicBoostDuration = 0.38f;
+	[Export] public float BoostEaseOutStart = 0.58f;
 
 	// =========================================
 	// PLAYER
@@ -72,6 +78,8 @@ public partial class PlayerFish : CharacterBody2D
 
 	private float boostCooldownTimer = 0f;
 	private float boostTimer = 0f;
+	private float boostDuration = 0f;
+	private float boostElapsed = 0f;
 
 	private bool boostActive = false;
 
@@ -86,6 +94,9 @@ public partial class PlayerFish : CharacterBody2D
 	private Sprite2D fishSprite;
 	private float slowTimer = 0f;
 	private float swimTime = 0f;
+	private Texture2D[] leftSwimFrames;
+	private Texture2D[] rightSwimFrames;
+	private int facingDirection = 1;
 
 	// smoother movement
 	private Vector2 currentVelocity = Vector2.Zero;
@@ -93,6 +104,16 @@ public partial class PlayerFish : CharacterBody2D
 	public override void _Ready()
 	{
 		fishSprite = GetNode<Sprite2D>("Sprite2D");
+		leftSwimFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2.png")
+		};
+		rightSwimFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1 1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2 1.png")
+		};
 		LoadControlSettings();
 	}
 
@@ -221,7 +242,7 @@ public partial class PlayerFish : CharacterBody2D
 			if (boostActive)
 			{
 				boostCooldownTimer = BoostCooldown;
-				boostTimer = MinBoostTime;
+				StartBoostTimer();
 			}
 		}
 
@@ -233,30 +254,30 @@ public partial class PlayerFish : CharacterBody2D
 		{
 			IsBoosting = true;
 
-			targetSpeed =
-				Speed * currentBoostMultiplier;
-
+			boostElapsed += dt;
 			boostTimer -= dt;
 
-			// realistic ending
-			if (boostTimer <= 0f)
-			{
-				// perfect boosts end smoothly
-				if (CurrentStress < 25f)
-				{
-					boostActive = false;
-				}
+			float boostProgress =
+				boostDuration > 0f
+					? Mathf.Clamp(boostElapsed / boostDuration, 0f, 1f)
+					: 1f;
 
-				// panic boosts collapse earlier
-				if (currentBoostMultiplier ==
-					PanicBoostMultiplier)
-				{
-					if (CurrentStress < 55f)
-					{
-						boostActive = false;
-					}
-				}
-			}
+			float easeProgress = Mathf.Clamp(
+				(boostProgress - BoostEaseOutStart) /
+				Mathf.Max(1f - BoostEaseOutStart, 0.01f),
+				0f,
+				1f
+			);
+			easeProgress = easeProgress * easeProgress * (3f - 2f * easeProgress);
+
+			float activeBoostMultiplier =
+				Mathf.Lerp(currentBoostMultiplier, 1f, easeProgress);
+
+			targetSpeed =
+				Speed * SpeedMultiplier * activeBoostMultiplier;
+
+			if (boostTimer <= 0f)
+				boostActive = false;
 		}
 
 		// =========================================
@@ -284,8 +305,14 @@ public partial class PlayerFish : CharacterBody2D
 		{
 			swimTime += dt;
 
+			UpdateFacingDirection();
+			UpdateSwimFrame();
+
+			float moveAngle = Velocity.Angle();
 			float targetRotation =
-				Velocity.Angle() + Mathf.Pi;
+				facingDirection > 0
+					? moveAngle
+					: Mathf.Wrap(moveAngle - Mathf.Pi, -Mathf.Pi, Mathf.Pi);
 
 			float wiggle =
 				Mathf.Sin(
@@ -301,6 +328,30 @@ public partial class PlayerFish : CharacterBody2D
 		}
 	}
 
+	private void UpdateFacingDirection()
+	{
+		if (Velocity.X > DirectionFlipDeadzone)
+			facingDirection = 1;
+		else if (Velocity.X < -DirectionFlipDeadzone)
+			facingDirection = -1;
+	}
+
+	private void UpdateSwimFrame()
+	{
+		Texture2D[] frames = facingDirection > 0 ? rightSwimFrames : leftSwimFrames;
+
+		if (frames == null || frames.Length == 0)
+			return;
+
+		int frameIndex = Mathf.PosMod((int)(swimTime * SwimFrameRate), frames.Length);
+		Texture2D texture = frames[frameIndex];
+
+		if (texture != null && fishSprite.Texture != texture)
+			fishSprite.Texture = texture;
+
+		fishSprite.FlipH = false;
+	}
+
 	// =========================================
 	// USED BY MAIN.CS
 	// =========================================
@@ -311,6 +362,20 @@ public partial class PlayerFish : CharacterBody2D
 			return 0f;
 
 		return currentStressDrain;
+	}
+
+	private void StartBoostTimer()
+	{
+		if (Mathf.IsEqualApprox(currentBoostMultiplier, PerfectBoostMultiplier))
+			boostDuration = PerfectBoostDuration;
+		else if (Mathf.IsEqualApprox(currentBoostMultiplier, NormalBoostMultiplier))
+			boostDuration = NormalBoostDuration;
+		else
+			boostDuration = PanicBoostDuration;
+
+		boostDuration = Mathf.Max(boostDuration, MinBoostTime);
+		boostTimer = boostDuration;
+		boostElapsed = 0f;
 	}
 
 	public void ApplySlow(float multiplier, float duration)

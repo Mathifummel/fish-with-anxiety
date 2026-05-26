@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://c8itemtrsh001"]
 
 [ext_resource type="Script" path="res://Scripts/PickupItem.cs" id="1_item"]
-[ext_resource type="Texture2D" path="res://Assets/Müll.png" id="2_tex"]
+[ext_resource type="Texture2D" uid="uid://b0dqooffbrsth" path="res://Assets/Müll.png" id="2_tex"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_item"]
 radius = 24.0
@@ -14,5 +14,5 @@ Type = 2
 shape = SubResource("CircleShape2D_item")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-scale = Vector2(0.18, 0.18)
+scale = Vector2(1, 1)
 texture = ExtResource("2_tex")

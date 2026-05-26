@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://ewrspq4ewljl"]
 
 [ext_resource type="Script" uid="uid://cxvloro5rw38w" path="res://Scripts/MainMenu.cs" id="1_tt5f1"]
-[ext_resource type="VideoStream" uid="uid://dxd43lj3cfvcx" path="res://Assets/underwater.ogv" id="2_koqhg"]
+[ext_resource type="VideoStream" path="res://Assets/underwater.ogv" id="2_koqhg"]
 [ext_resource type="Texture2D" uid="uid://cw08k75mwrjh3" path="res://Assets/Logo.png" id="3_cmrfp"]
 [ext_resource type="Texture2D" uid="uid://br23fogajgnie" path="res://Assets/Spielen btn.png" id="4_loo7a"]
 [ext_resource type="Texture2D" uid="uid://boicoyo0kogo6" path="res://Assets/beenden btn.png" id="5_if7li"]

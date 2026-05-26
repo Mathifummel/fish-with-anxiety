@@ -8,7 +8,7 @@ radius = 27.0
 
 [node name="NPCFish" type="CharacterBody2D" unique_id=992510747 groups=["fish"]]
 script = ExtResource("1_xbqoh")
-Speed = 105.0
+Speed = 113.0
 CollisionRadius = 27.0
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1515495536]
