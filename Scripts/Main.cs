@@ -542,7 +542,7 @@ public partial class Main : Node2D
 		item.Position = spawnPos.Value;
 		ItemContainer.AddChild(item);
 
-		if (itemHintTimer <= 0f && GD.Randf() < 0.35f)
+		if (IsUsefulHintItem(type.Value) && itemHintTimer <= 0f && GD.Randf() < 0.35f)
 		{
 			itemHintTimer = ItemHintDuration;
 			PositionItemDirectionHint(item);
@@ -578,6 +578,12 @@ public partial class Main : Node2D
 			return null;
 
 		return pool[(int)(GD.Randi() % pool.Count)];
+	}
+
+	private bool IsUsefulHintItem(ItemType type)
+	{
+		return type == ItemType.Alcohol ||
+			type == ItemType.ChorusFruit;
 	}
 
 	private int CountLiveItems()
@@ -838,7 +844,7 @@ public partial class Main : Node2D
 		if (itemHintTimer > 0f)
 		{
 			itemHintTimer -= dt;
-			Node2D nearest = FindNearestItem();
+			Node2D nearest = FindNearestUsefulItem();
 
 			if (nearest == null || itemHintTimer <= 0f)
 			{
@@ -862,7 +868,7 @@ public partial class Main : Node2D
 		if (GD.Randf() > ItemHintChance)
 			return;
 
-		Node2D item = FindNearestItem();
+		Node2D item = FindNearestUsefulItem();
 
 		if (item == null)
 			return;
@@ -892,7 +898,7 @@ public partial class Main : Node2D
 		ItemHintText.Modulate = ItemHintArrow.Modulate;
 	}
 
-	private Node2D FindNearestItem()
+	private Node2D FindNearestUsefulItem()
 	{
 		if (ItemContainer == null)
 			return null;
@@ -903,6 +909,9 @@ public partial class Main : Node2D
 		foreach (Node child in ItemContainer.GetChildren())
 		{
 			if (child is not Node2D item || item.IsQueuedForDeletion())
+				continue;
+
+			if (item is PickupItem pickup && !IsUsefulHintItem(pickup.Type))
 				continue;
 
 			float distance = Player.GlobalPosition.DistanceSquaredTo(item.GlobalPosition);

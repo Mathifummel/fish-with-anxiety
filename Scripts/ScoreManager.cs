@@ -122,6 +122,30 @@ public partial class ScoreManager : Node
 		PendingRevival = false;
 	}
 
+	public void ResetAllProgress()
+	{
+		Reset();
+		TotalCoins = 0;
+		PendingRevival = false;
+		SavedPlayerPosition = Vector2.Zero;
+		SavedLevel = 1;
+		SavedStress = 25f;
+
+		DeleteUserFile(SavePath);
+		DeleteUserFile(CoinSavePath);
+	}
+
+	private void DeleteUserFile(string path)
+	{
+		if (!FileAccess.FileExists(path))
+			return;
+
+		Error error = DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
+
+		if (error != Error.Ok)
+			GD.PushWarning($"Konnte Speicherdatei nicht loeschen: {path}");
+	}
+
 	private void SaveTotalCoins()
 	{
 		var file = FileAccess.Open(
@@ -235,6 +259,7 @@ public partial class ScoreManager : Node
 		);
 
 		string content = file.GetAsText();
+		file.Close();
 
 		if (string.IsNullOrEmpty(content))
 		{

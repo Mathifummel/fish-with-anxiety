@@ -5,11 +5,14 @@ public partial class MainMenu : Control
 {
 	private ColorRect settingsBackdrop;
 	private Panel settingsPanel;
+	private ColorRect tutorialBackdrop;
+	private Panel tutorialPanel;
 	private VBoxContainer customBindings;
 	private Label captureLabel;
 	private Label settingsStatusLabel;
 	private TextureRect confirmationIcon;
 	private Button confirmSettingsButton;
+	private Button resetProgressButton;
 	private string pendingCustomAction = "";
 	private VideoStreamPlayer backgroundVideo;
 	private Node2D menuFishLayer;
@@ -19,6 +22,7 @@ public partial class MainMenu : Control
 	private Texture2D[] menuPlayerRightFrames;
 	private float visualTime = 0f;
 	private float settingsConfirmationTimer = 0f;
+	private float resetConfirmationTimer = 0f;
 	private FishSwimPath menuSwimPath = FishSwimPath.LeftToRight;
 	private float menuPathProgress = 0f;
 	private Vector2 menuLastLeaderPos = Vector2.Zero;
@@ -26,6 +30,8 @@ public partial class MainMenu : Control
 	private const float MenuFollowerProgressLag = 0.055f;
 	private const float MenuPathEndPadding = 0.32f;
 	private const float MenuPlayerFrameRate = 10f;
+	private const float ResetConfirmationDuration = 4f;
+	private const string TutorialSeenPath = "user://tutorial_seen.save";
 	private readonly Dictionary<PlayerFish.ControlScheme, Button> modeButtons =
 		new Dictionary<PlayerFish.ControlScheme, Button>();
 	private readonly Dictionary<string, Button> customButtons = new Dictionary<string, Button>();
@@ -37,8 +43,13 @@ public partial class MainMenu : Control
 		SetupMovingBackground();
 		CreateMenuFishShowcase();
 		CreateCoinCounter();
+		CreateTutorialButton();
 		CreateSettingsPanel();
+		CreateTutorialPanel();
 		SceneTransition.FadeIn(GetTree(), 0.32f);
+
+		if (!HasSeenTutorial())
+			CallDeferred(nameof(OpenTutorialFirstTime));
 	}
 
 	public override void _Process(double delta)
@@ -47,6 +58,7 @@ public partial class MainMenu : Control
 		AnimateBackground();
 		AnimateMenuFish();
 		UpdateSettingsConfirmation((float)delta);
+		UpdateResetConfirmation((float)delta);
 	}
 
 	private void SetupMovingBackground()
@@ -233,10 +245,134 @@ public partial class MainMenu : Control
 		GetNode<CanvasLayer>("CanvasLayer").AddChild(coinLabel);
 	}
 
+	private void CreateTutorialButton()
+	{
+		Button tutorialButton = new Button();
+		tutorialButton.Text = "Tutorial";
+		tutorialButton.CustomMinimumSize = new Vector2(160, 42);
+		tutorialButton.SetAnchorsPreset(LayoutPreset.BottomLeft);
+		tutorialButton.OffsetLeft = 24;
+		tutorialButton.OffsetTop = -76;
+		tutorialButton.OffsetRight = 184;
+		tutorialButton.OffsetBottom = -28;
+		ApplyButtonStyle(tutorialButton, false);
+		tutorialButton.Pressed += OnTutorialButtonPressed;
+
+		GetNode<CanvasLayer>("CanvasLayer").AddChild(tutorialButton);
+	}
+
+	private void CreateTutorialPanel()
+	{
+		tutorialBackdrop = new ColorRect();
+		tutorialBackdrop.Visible = false;
+		tutorialBackdrop.Color = new Color(0f, 0.03f, 0.05f, 0.62f);
+		tutorialBackdrop.MouseFilter = MouseFilterEnum.Stop;
+		tutorialBackdrop.SetAnchorsPreset(LayoutPreset.FullRect);
+
+		tutorialPanel = new Panel();
+		tutorialPanel.Visible = false;
+		tutorialPanel.AnchorLeft = 0.5f;
+		tutorialPanel.AnchorTop = 0.5f;
+		tutorialPanel.AnchorRight = 0.5f;
+		tutorialPanel.AnchorBottom = 0.5f;
+		tutorialPanel.OffsetLeft = -320;
+		tutorialPanel.OffsetTop = -250;
+		tutorialPanel.OffsetRight = 320;
+		tutorialPanel.OffsetBottom = 250;
+		tutorialPanel.AddThemeStyleboxOverride(
+			"panel",
+			CreatePanelStyle(new Color(0.015f, 0.1f, 0.15f, 0.97f))
+		);
+
+		VBoxContainer layout = new VBoxContainer();
+		layout.AnchorRight = 1f;
+		layout.AnchorBottom = 1f;
+		layout.OffsetLeft = 32;
+		layout.OffsetTop = 26;
+		layout.OffsetRight = -32;
+		layout.OffsetBottom = -26;
+		layout.AddThemeConstantOverride("separation", 12);
+		tutorialPanel.AddChild(layout);
+
+		Label title = new Label();
+		title.Text = "Tutorial";
+		title.HorizontalAlignment = HorizontalAlignment.Center;
+		title.AddThemeFontSizeOverride("font_size", 32);
+		title.AddThemeColorOverride("font_color", new Color(0.92f, 1f, 0.98f));
+		title.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.6f));
+		title.AddThemeConstantOverride("shadow_offset_y", 2);
+		layout.AddChild(title);
+
+		Label text = new Label();
+		text.Text =
+			"Bleib so lange wie möglich am Leben und sammle Münzen für Bonuspunkte.\n\n" +
+			"Halte Abstand zu anderen Fischen. Je näher sie kommen, desto stärker steigt dein Stress. Bei vollem Stress oder Kontakt ist die Runde vorbei.\n\n" +
+			"Boost gibt dir Tempo und kann Stress abbauen, wenn du ihn gezielt einsetzt.\n\n" +
+			"Items: Alkohol macht dich kurz unverwundbar, die Chorusfrucht teleportiert dich weg. Müll ist ein schlechtes Item und verlangsamt dich.\n\n" +
+			"Der Richtungspfeil zeigt nur auf nützliche Items.";
+		text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		text.AddThemeFontSizeOverride("font_size", 18);
+		text.AddThemeColorOverride("font_color", new Color(0.82f, 0.96f, 0.98f));
+		text.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.55f));
+		text.AddThemeConstantOverride("shadow_offset_y", 1);
+		text.SizeFlagsVertical = SizeFlags.ExpandFill;
+		layout.AddChild(text);
+
+		Button closeButton = CreateSettingsButton("Verstanden");
+		closeButton.CustomMinimumSize = new Vector2(0, 44);
+		closeButton.Pressed += CloseTutorialPanel;
+		layout.AddChild(closeButton);
+
+		CanvasLayer canvas = GetNode<CanvasLayer>("CanvasLayer");
+		canvas.AddChild(tutorialBackdrop);
+		canvas.AddChild(tutorialPanel);
+	}
+
 	// START BUTTON
 	private void _on_button_pressed()
 	{
 		SceneTransition.FadeToScene(GetTree(), "res://Scenes/main.tscn");
+	}
+
+	private void OnTutorialButtonPressed()
+	{
+		ShowTutorialPanel();
+	}
+
+	private void OpenTutorialFirstTime()
+	{
+		ShowTutorialPanel();
+	}
+
+	private void ShowTutorialPanel()
+	{
+		tutorialBackdrop.Visible = true;
+		tutorialPanel.Visible = true;
+		SaveTutorialSeen();
+	}
+
+	private void CloseTutorialPanel()
+	{
+		tutorialBackdrop.Visible = false;
+		tutorialPanel.Visible = false;
+	}
+
+	private bool HasSeenTutorial()
+	{
+		return FileAccess.FileExists(TutorialSeenPath);
+	}
+
+	private void SaveTutorialSeen()
+	{
+		var file = FileAccess.Open(TutorialSeenPath, FileAccess.ModeFlags.Write);
+		file.StoreString("1");
+		file.Close();
+	}
+
+	private void DeleteTutorialSeenFlag()
+	{
+		if (FileAccess.FileExists(TutorialSeenPath))
+			DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(TutorialSeenPath));
 	}
 
 	private void _on_settings_button_pressed()
@@ -356,9 +492,22 @@ public partial class MainMenu : Control
 		};
 		confirmRow.AddChild(confirmSettingsButton);
 
+		HBoxContainer bottomRow = new HBoxContainer();
+		bottomRow.AddThemeConstantOverride("separation", 10);
+		layout.AddChild(bottomRow);
+
+		resetProgressButton = new Button();
+		resetProgressButton.Text = "Spielstand löschen";
+		resetProgressButton.CustomMinimumSize = new Vector2(0, 38);
+		resetProgressButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		ApplyButtonStyle(resetProgressButton, false);
+		resetProgressButton.Pressed += OnResetProgressPressed;
+		bottomRow.AddChild(resetProgressButton);
+
 		Button closeButton = new Button();
 		closeButton.Text = "Zurück";
 		closeButton.CustomMinimumSize = new Vector2(0, 38);
+		closeButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 		ApplyButtonStyle(closeButton, false);
 		closeButton.Pressed += () =>
 		{
@@ -367,7 +516,7 @@ public partial class MainMenu : Control
 			settingsBackdrop.Visible = false;
 			settingsPanel.Visible = false;
 		};
-		layout.AddChild(closeButton);
+		bottomRow.AddChild(closeButton);
 
 		CanvasLayer canvas = GetNode<CanvasLayer>("CanvasLayer");
 		canvas.AddChild(settingsBackdrop);
@@ -455,6 +604,38 @@ public partial class MainMenu : Control
 			UpdateSettingsStatus();
 	}
 
+	private void UpdateResetConfirmation(float dt)
+	{
+		if (resetConfirmationTimer <= 0f)
+			return;
+
+		resetConfirmationTimer -= dt;
+
+		if (resetConfirmationTimer <= 0f && resetProgressButton != null)
+			resetProgressButton.Text = "Spielstand löschen";
+	}
+
+	private void OnResetProgressPressed()
+	{
+		if (resetConfirmationTimer <= 0f)
+		{
+			resetConfirmationTimer = ResetConfirmationDuration;
+
+			if (resetProgressButton != null)
+				resetProgressButton.Text = "Wirklich löschen?";
+
+			ShowSettingsConfirmation("Zum Löschen nochmal drücken");
+			return;
+		}
+
+		resetConfirmationTimer = 0f;
+		GetNode<ScoreManager>("/root/ScoreManager").ResetAllProgress();
+		DeleteTutorialSeenFlag();
+		settingsBackdrop.Visible = false;
+		settingsPanel.Visible = false;
+		SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.2f);
+	}
+
 	private void UpdateSettingsStatus()
 	{
 		if (settingsStatusLabel != null)
@@ -465,6 +646,9 @@ public partial class MainMenu : Control
 
 		if (confirmSettingsButton != null)
 			confirmSettingsButton.Text = "Bestätigen";
+
+		if (resetConfirmationTimer <= 0f && resetProgressButton != null)
+			resetProgressButton.Text = "Spielstand löschen";
 
 		confirmationIcon?.Hide();
 	}
