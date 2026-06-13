@@ -21,6 +21,7 @@ public partial class PartyFish : CharacterBody2D
 
 	[Export] public float BaseSpeed = 230f;
 	[Export] public float CollisionRadius = 32f;
+	[Export] public int GamepadDevice = -1;
 
 	public ControlMode Controls = ControlMode.None;
 	public VisualKind Visual = VisualKind.Player;
@@ -60,6 +61,7 @@ public partial class PartyFish : CharacterBody2D
 	private float currentBoostMultiplier = 1f;
 	private float stunTimer = 0f;
 	private int facingDirection = 1;
+	private const float GamepadMoveDeadzone = 0.22f;
 
 	public override void _Ready()
 	{
@@ -240,23 +242,61 @@ public partial class PartyFish : CharacterBody2D
 
 	private Vector2 GetMoveDirection()
 	{
-		return Controls switch
+		Vector2 direction = Controls switch
 		{
 			ControlMode.Wasd => GetKeyDirection(Key.W, Key.S, Key.A, Key.D),
 			ControlMode.Arrows => GetKeyDirection(Key.Up, Key.Down, Key.Left, Key.Right),
 			ControlMode.Ai => AiDirection.Normalized(),
 			_ => Vector2.Zero
 		};
+
+		if (Controls == ControlMode.Wasd || Controls == ControlMode.Arrows)
+		{
+			Vector2 gamepadDirection = GetGamepadDirection();
+
+			if (gamepadDirection != Vector2.Zero)
+				direction = gamepadDirection;
+		}
+
+		return direction;
 	}
 
 	private bool IsBoostPressed()
 	{
+		if ((Controls == ControlMode.Wasd || Controls == ControlMode.Arrows) &&
+			Input.IsActionJustPressed("ui_accept"))
+		{
+			return true;
+		}
+
 		return Controls switch
 		{
 			ControlMode.Wasd => Input.IsKeyPressed(Key.Space),
 			ControlMode.Arrows => Input.IsKeyPressed(Key.Enter),
 			_ => false
 		};
+	}
+
+	private Vector2 GetGamepadDirection()
+	{
+		if (GamepadDevice == -2)
+			return Vector2.Zero;
+
+		foreach (int device in Input.GetConnectedJoypads())
+		{
+			if (GamepadDevice >= 0 && device != GamepadDevice)
+				continue;
+
+			Vector2 axis = new Vector2(
+				Input.GetJoyAxis(device, JoyAxis.LeftX),
+				Input.GetJoyAxis(device, JoyAxis.LeftY)
+			);
+
+			if (axis.Length() >= GamepadMoveDeadzone)
+				return axis.LimitLength(1f);
+		}
+
+		return Vector2.Zero;
 	}
 
 	private void StartBoost()

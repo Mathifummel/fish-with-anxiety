@@ -33,8 +33,26 @@ public partial class NameInput : Control
 		SetAnchorsPreset(LayoutPreset.FullRect);
 		ClearSceneChildren();
 		BuildLayout();
-		nameField.GrabFocus();
+		CallDeferred(nameof(RumbleGameOver));
+		GameUi.FocusFirstButton(this);
 		SceneTransition.FadeIn(GetTree(), 0.26f);
+	}
+
+	private void RumbleGameOver()
+	{
+		GameUi.RumbleConnectedJoypads(0.55f, 1f, 0.55f);
+	}
+
+	public override void _UnhandledInput(InputEvent inputEvent)
+	{
+		GameUi.EnsureInputDefaults();
+
+		if (GameUi.IsCancelPressed(inputEvent))
+		{
+			GetViewport().SetInputAsHandled();
+			GameUi.RumbleConnectedJoypads(0.15f, 0.42f, 0.1f);
+			SaveAndExit();
+		}
 	}
 
 	public override void _Process(double delta)
@@ -492,6 +510,7 @@ public partial class NameInput : Control
 			return;
 		}
 
+		GameUi.RumbleConnectedJoypads();
 		decisionExpired = true;
 		decisionTimer = 0f;
 
@@ -517,6 +536,7 @@ public partial class NameInput : Control
 		if (!decisionExpired)
 			decisionExpired = true;
 
+		GameUi.RumbleConnectedJoypads();
 		SaveAndExit();
 	}
 
@@ -525,6 +545,7 @@ public partial class NameInput : Control
 		if (!decisionExpired)
 			decisionExpired = true;
 
+		GameUi.RumbleConnectedJoypads();
 		SaveAndExit();
 	}
 
@@ -533,6 +554,7 @@ public partial class NameInput : Control
 		if (!decisionExpired)
 			decisionExpired = true;
 
+		GameUi.RumbleConnectedJoypads();
 		SaveScore();
 		GetNode<ScoreManager>("/root/ScoreManager").ClearRevivalState();
 		SceneTransition.FadeToScene(GetTree(), "res://Scenes/main.tscn", 0.32f);

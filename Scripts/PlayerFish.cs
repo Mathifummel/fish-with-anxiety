@@ -22,6 +22,7 @@ public partial class PlayerFish : CharacterBody2D
 	private const string ControlsSection = "controls";
 	private const string BindingsSection = "bindings";
 	private static bool controlsLoaded = false;
+	private const float GamepadMoveDeadzone = 0.22f;
 
 	// =========================================
 	// MOVEMENT
@@ -157,6 +158,11 @@ public partial class PlayerFish : CharacterBody2D
 				dir = GetKeyDirection(Key.Up, Key.Down, Key.Left, Key.Right);
 				break;
 		}
+
+		Vector2 gamepadDir = GetLeftStickDirection();
+
+		if (gamepadDir != Vector2.Zero)
+			dir = gamepadDir;
 
 		// =========================================
 		// COOLDOWN
@@ -454,6 +460,22 @@ public partial class PlayerFish : CharacterBody2D
 			dir += Vector2.Up;
 
 		return dir.Normalized();
+	}
+
+	private Vector2 GetLeftStickDirection()
+	{
+		foreach (int device in Input.GetConnectedJoypads())
+		{
+			Vector2 axis = new Vector2(
+				Input.GetJoyAxis(device, JoyAxis.LeftX),
+				Input.GetJoyAxis(device, JoyAxis.LeftY)
+			);
+
+			if (axis.Length() >= GamepadMoveDeadzone)
+				return axis.LimitLength(1f);
+		}
+
+		return Vector2.Zero;
 	}
 
 	private bool IsBoostJustPressed()

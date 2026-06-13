@@ -1,15 +1,18 @@
 using Godot;
+using System.Collections.Generic;
 
 public static class GameUi
 {
 	private static Font pixelFont;
+	private static bool inputDefaultsReady = false;
+	private const float ShortRumbleDuration = 0.16f;
 
 	public static readonly Color PanelBackground = new Color(1f, 1f, 1f, 0.24f);
 	public static readonly Color PanelBorder = new Color(1f, 1f, 1f, 0.62f);
 	public static readonly Color ButtonNormal = new Color(1f, 1f, 1f, 0.62f);
 	public static readonly Color ButtonHover = new Color(1f, 1f, 1f, 0.82f);
 	public static readonly Color ButtonPressed = new Color(0.84f, 0.96f, 1f, 0.86f);
-	public static readonly Color ButtonFocus = new Color(1f, 1f, 1f, 0.86f);
+	public static readonly Color ButtonFocus = new Color(0.38f, 0.94f, 1f, 0.95f);
 	public static readonly Color ButtonBorder = new Color(1f, 1f, 1f, 0.86f);
 	public static readonly Color ButtonHoverBorder = new Color(0.82f, 0.96f, 1f, 0.95f);
 	public static readonly Color DarkText = new Color(0.05f, 0.22f, 0.34f);
@@ -98,6 +101,8 @@ public static class GameUi
 
 	public static void ApplyButton(Button button, int fontSize = 18, bool selected = false)
 	{
+		EnsureInputDefaults();
+
 		Color normal = selected ? new Color(0.82f, 0.96f, 1f, 0.86f) : ButtonNormal;
 		Color hover = selected ? new Color(1f, 1f, 1f, 0.9f) : ButtonHover;
 		Color pressed = selected ? new Color(0.72f, 0.92f, 1f, 0.92f) : ButtonPressed;
@@ -105,11 +110,160 @@ public static class GameUi
 		button.AddThemeStyleboxOverride("normal", CreateButtonStyle(normal, ButtonBorder));
 		button.AddThemeStyleboxOverride("hover", CreateButtonStyle(hover, ButtonHoverBorder));
 		button.AddThemeStyleboxOverride("pressed", CreateButtonStyle(pressed, new Color(1f, 1f, 1f, 0.98f)));
-		button.AddThemeStyleboxOverride("focus", CreateButtonStyle(ButtonFocus, new Color(0.65f, 0.9f, 1f, 1f)));
+		button.AddThemeStyleboxOverride("focus", CreateButtonStyle(ButtonFocus, new Color(0.02f, 0.34f, 0.52f, 1f)));
 		button.AddThemeColorOverride("font_color", selected ? new Color(0.02f, 0.14f, 0.24f) : DarkText);
 		button.AddThemeColorOverride("font_hover_color", new Color(0.02f, 0.16f, 0.28f));
 		button.AddThemeColorOverride("font_pressed_color", new Color(0.02f, 0.14f, 0.24f));
+		button.AddThemeColorOverride("font_focus_color", new Color(0f, 0.08f, 0.13f));
+		button.FocusMode = Control.FocusModeEnum.All;
 		ApplyFont(button, fontSize);
+	}
+
+	public static void EnsureInputDefaults()
+	{
+		if (inputDefaultsReady)
+			return;
+
+		inputDefaultsReady = true;
+
+		EnsureKeyAction("ui_up", Key.Up);
+		EnsureKeyAction("ui_down", Key.Down);
+		EnsureKeyAction("ui_left", Key.Left);
+		EnsureKeyAction("ui_right", Key.Right);
+		EnsureKeyAction("ui_accept", Key.Enter);
+		EnsureKeyAction("ui_accept", Key.Space);
+		EnsureJoyButtonAction("ui_accept", JoyButton.A);
+		EnsureJoyButtonAction("ui_cancel", JoyButton.B);
+		EnsureJoyButtonAction("pause", JoyButton.Start);
+	}
+
+	public static void FocusFirstButton(Control root)
+	{
+		ConfigureButtonNavigation(root);
+
+		Button button = FindFirstButton(root);
+
+		if (button != null)
+			button.CallDeferred(Control.MethodName.GrabFocus);
+	}
+
+	public static void ConfigureButtonNavigation(Control root)
+	{
+		List<Button> buttons = new List<Button>();
+		CollectFocusableButtons(root, buttons);
+
+		if (buttons.Count == 0)
+			return;
+
+		for (int i = 0; i < buttons.Count; i++)
+		{
+			Button current = buttons[i];
+			Button previous = buttons[Mathf.PosMod(i - 1, buttons.Count)];
+			Button next = buttons[Mathf.PosMod(i + 1, buttons.Count)];
+
+			NodePath previousPath = current.GetPathTo(previous);
+			NodePath nextPath = current.GetPathTo(next);
+
+			current.FocusNeighborTop = previousPath;
+			current.FocusNeighborLeft = previousPath;
+			current.FocusNeighborBottom = nextPath;
+			current.FocusNeighborRight = nextPath;
+		}
+	}
+
+	private static void CollectFocusableButtons(Node node, List<Button> buttons)
+	{
+		if (node is Button button &&
+			button.IsVisibleInTree() &&
+			!button.Disabled &&
+			!button.IsQueuedForDeletion())
+		{
+			buttons.Add(button);
+		}
+
+		foreach (Node child in node.GetChildren())
+			CollectFocusableButtons(child, buttons);
+	}
+
+	private static Button FindFirstButton(Node node)
+	{
+		if (node is Button button &&
+			button.IsVisibleInTree() &&
+			!button.Disabled &&
+			!button.IsQueuedForDeletion())
+		{
+			return button;
+		}
+
+		foreach (Node child in node.GetChildren())
+		{
+			Button found = FindFirstButton(child);
+
+			if (found != null)
+				return found;
+		}
+
+		return null;
+	}
+
+	private static void EnsureKeyAction(string action, Key key)
+	{
+		if (!InputMap.HasAction(action))
+			InputMap.AddAction(action);
+
+		foreach (InputEvent inputEvent in InputMap.ActionGetEvents(action))
+		{
+			if (inputEvent is InputEventKey keyEvent &&
+				(keyEvent.PhysicalKeycode == key || keyEvent.Keycode == key))
+			{
+				return;
+			}
+		}
+
+		InputEventKey newEvent = new InputEventKey();
+		newEvent.PhysicalKeycode = key;
+		InputMap.ActionAddEvent(action, newEvent);
+	}
+
+	private static void EnsureJoyButtonAction(string action, JoyButton button)
+	{
+		if (!InputMap.HasAction(action))
+			InputMap.AddAction(action);
+
+		foreach (InputEvent inputEvent in InputMap.ActionGetEvents(action))
+		{
+			if (inputEvent is InputEventJoypadButton joyEvent &&
+				joyEvent.ButtonIndex == button)
+			{
+				return;
+			}
+		}
+
+		InputEventJoypadButton newEvent = new InputEventJoypadButton();
+		newEvent.ButtonIndex = button;
+		InputMap.ActionAddEvent(action, newEvent);
+	}
+
+	public static bool IsPausePressed(InputEvent inputEvent)
+	{
+		return inputEvent.IsActionPressed("pause") ||
+			(inputEvent is InputEventJoypadButton joyEvent &&
+				joyEvent.Pressed &&
+				joyEvent.ButtonIndex == JoyButton.Start);
+	}
+
+	public static bool IsCancelPressed(InputEvent inputEvent)
+	{
+		return inputEvent.IsActionPressed("ui_cancel") ||
+			(inputEvent is InputEventJoypadButton joyEvent &&
+				joyEvent.Pressed &&
+				joyEvent.ButtonIndex == JoyButton.B);
+	}
+
+	public static void RumbleConnectedJoypads(float weak = 0.25f, float strong = 0.75f, float duration = ShortRumbleDuration)
+	{
+		foreach (int device in Input.GetConnectedJoypads())
+			Input.StartJoyVibration(device, weak, strong, duration);
 	}
 
 	public static StyleBoxFlat CreateInputStyle(bool focused)

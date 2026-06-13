@@ -75,6 +75,15 @@ public partial class TutorialMode : Node2D
 		UpdateUi();
 	}
 
+	public override void _UnhandledInput(InputEvent inputEvent)
+	{
+		if (GameUi.IsCancelPressed(inputEvent))
+		{
+			GetViewport().SetInputAsHandled();
+			SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.25f);
+		}
+	}
+
 	public override void _PhysicsProcess(double delta)
 	{
 		UpdateTutorialStress((float)delta);
@@ -619,6 +628,8 @@ public partial class TutorialMode : Node2D
 		menuButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		menuButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.32f);
 		buttons.AddChild(menuButton);
+
+		GameUi.FocusFirstButton(buttons);
 	}
 
 	private void SaveTutorialSeen()

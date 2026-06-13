@@ -25,7 +25,17 @@ public partial class SimpleMenuPage : Control
 		}
 
 		AddBackButton();
+		GameUi.FocusFirstButton(this);
 		SceneTransition.FadeIn(GetTree(), 0.24f);
+	}
+
+	public override void _UnhandledInput(InputEvent inputEvent)
+	{
+		if (GameUi.IsCancelPressed(inputEvent))
+		{
+			GetViewport().SetInputAsHandled();
+			SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
+		}
 	}
 
 	private void AddBackButton()

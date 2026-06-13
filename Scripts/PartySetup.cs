@@ -44,6 +44,23 @@ public partial class PartySetup : Control
 		backgroundVideo.OffsetBottom = 34f + driftY;
 	}
 
+	public override void _UnhandledInput(InputEvent inputEvent)
+	{
+		if (!GameUi.IsCancelPressed(inputEvent))
+			return;
+
+		GetViewport().SetInputAsHandled();
+
+		if (step == SetupStep.Mode)
+			SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
+		else if (step == SetupStep.Rounds)
+			ShowModeStep();
+		else if (singleMiniGameSelected)
+			ShowModeStep();
+		else
+			ShowRoundsStep();
+	}
+
 	private void BuildBackground()
 	{
 		backgroundVideo = new VideoStreamPlayer();
@@ -130,6 +147,7 @@ public partial class PartySetup : Control
 		Button backButton = CreateButton("Zurück");
 		backButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
 		content.AddChild(backButton);
+		GameUi.FocusFirstButton(this);
 	}
 
 	private void ShowRoundsStep()
@@ -176,6 +194,7 @@ public partial class PartySetup : Control
 		Button backButton = CreateButton("Zurück");
 		backButton.Pressed += ShowModeStep;
 		content.AddChild(backButton);
+		GameUi.FocusFirstButton(this);
 	}
 
 	private void ShowFishStep()
@@ -229,6 +248,7 @@ public partial class PartySetup : Control
 				ShowRoundsStep();
 		};
 		content.AddChild(backButton);
+		GameUi.FocusFirstButton(this);
 	}
 
 	private void SelectSingleMiniGame(PartyState.GameSelection selection)

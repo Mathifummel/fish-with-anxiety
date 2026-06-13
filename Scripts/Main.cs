@@ -43,9 +43,9 @@ public partial class Main : Node2D
 	[Export] public float ContactRadius = 55f;
 	[Export] public float ContactStressBonus = 220f;
 
-	[Export] public float PassiveDangerRadius = 240f;
-	[Export] public float PassiveContactRadius = 36f;
-	[Export] public float PassiveStressWeight = 0.32f;
+	[Export] public float PassiveDangerRadius = 320f;
+	[Export] public float PassiveContactRadius = 12f;
+	[Export] public float PassiveStressWeight = 1f;
 	[Export] public float JellyfishDangerRadius = 330f;
 	[Export] public float JellyfishContactRadius = 48f;
 	[Export] public float JellyfishStressWeight = 0.72f;
@@ -228,6 +228,7 @@ public partial class Main : Node2D
 		HideItemDirectionHint();
 		HidePauseMenu();
 		PauseButton?.Show();
+		GameUi.RumbleConnectedJoypads(0.22f, 0.58f, 0.18f);
 
 		ApplyLevelSettings(currentLevel, false);
 		SpawnInitialWorld();
@@ -703,6 +704,7 @@ public partial class Main : Node2D
 			UpdatePauseModeButtonLabels();
 			UpdatePauseCustomButtonLabels();
 			UpdatePauseSettingsStatus();
+			GameUi.FocusFirstButton(PausePanel);
 			return;
 		}
 
@@ -787,6 +789,8 @@ public partial class Main : Node2D
 
 	public override void _Input(InputEvent inputEvent)
 	{
+		GameUi.EnsureInputDefaults();
+
 		if (!string.IsNullOrEmpty(pendingPauseCustomAction))
 		{
 			if (inputEvent is InputEventKey captureKey &&
@@ -815,6 +819,15 @@ public partial class Main : Node2D
 				FinishPauseInputCapture();
 				return;
 			}
+		}
+
+		if (GameUi.IsPausePressed(inputEvent) &&
+			gameStarted &&
+			!gameOverTriggered)
+		{
+			SetGameplayPaused(!gamePaused);
+			MarkInputHandled();
+			return;
 		}
 
 		if (inputEvent is InputEventKey keyEvent &&
@@ -892,6 +905,7 @@ public partial class Main : Node2D
 
 		PauseButton?.Show();
 		GetNode<ScoreManager>("/root/ScoreManager").StartScoring();
+		GameUi.RumbleConnectedJoypads(0.18f, 0.5f, 0.16f);
 	}
 
 	// =====================================
@@ -1988,6 +2002,9 @@ public partial class Main : Node2D
 			}
 		}
 
+		float passiveThreatPressure = 0f;
+		float passiveContactPressure = 0f;
+
 		foreach (Node node in PassiveFishContainer.GetChildren())
 		{
 			if (node is PassiveFish fish)
@@ -1999,19 +2016,30 @@ public partial class Main : Node2D
 
 				if (realDist <= 0f)
 				{
+					Stress = 100f;
+					Player.CurrentStress = Stress;
+					StressBar.Value = Stress;
+					UpdateStressBarColor();
 					GameOver();
 					return;
 				}
 
-				threatPressure +=
+				passiveThreatPressure = Mathf.Max(
+					passiveThreatPressure,
 					CalculateProximityPressure(realDist, PassiveDangerRadius) *
-					PassiveStressWeight;
+					PassiveStressWeight
+				);
 
-				contactPressure +=
+				passiveContactPressure = Mathf.Max(
+					passiveContactPressure,
 					CalculateContactPressure(realDist, PassiveContactRadius) *
-					PassiveStressWeight;
+					PassiveStressWeight
+				);
 			}
 		}
+
+		threatPressure += passiveThreatPressure;
+		contactPressure += passiveContactPressure;
 
 		if (JellyfishContainer != null)
 		{
@@ -2091,6 +2119,7 @@ public partial class Main : Node2D
 		gameOverTriggered = true;
 		gameStarted = false;
 		gamePaused = false;
+		GameUi.RumbleConnectedJoypads(0.55f, 1f, 0.65f);
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 		sm.StopScoring();

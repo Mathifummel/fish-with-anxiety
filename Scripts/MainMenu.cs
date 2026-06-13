@@ -47,6 +47,7 @@ public partial class MainMenu : Control
 
 		multiplayerButton = GetNodeOrNull<Button>(MultiplayerButtonPath);
 		CallDeferred(nameof(RefreshButtonPivots));
+		GameUi.FocusFirstButton(this);
 		SceneTransition.FadeIn(GetTree(), 0.28f);
 	}
 
@@ -165,8 +166,6 @@ public partial class MainMenu : Control
 		button.Pressed += handler;
 		button.MouseEntered += () => AnimateButton(button, true);
 		button.MouseExited += () => AnimateButton(button, false);
-		button.FocusEntered += () => AnimateButton(button, true);
-		button.FocusExited += () => AnimateButton(button, false);
 		button.Scale = Vector2.One;
 		button.Modulate = new Color(1f, 1f, 1f, 0.97f);
 		button.CustomMinimumSize = new Vector2(240, 46);

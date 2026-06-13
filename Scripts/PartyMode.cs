@@ -120,6 +120,17 @@ public partial class PartyMode : Control
 		}
 	}
 
+	public override void _UnhandledInput(InputEvent inputEvent)
+	{
+		if (matchButtons != null &&
+			matchButtons.Visible &&
+			GameUi.IsCancelPressed(inputEvent))
+		{
+			GetViewport().SetInputAsHandled();
+			SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.3f);
+		}
+	}
+
 	public override void _PhysicsProcess(double delta)
 	{
 		if (state != RoundState.Playing)
@@ -553,8 +564,19 @@ public partial class PartyMode : Control
 		fish.Position = position;
 		fish.BaseSpeed = speed;
 		fish.Bounds = arenaBounds.Grow(-48f);
+		fish.GamepadDevice = GetGamepadDeviceForControls(controls);
 		world.AddChild(fish);
 		return fish;
+	}
+
+	private int GetGamepadDeviceForControls(PartyFish.ControlMode controls)
+	{
+		return controls switch
+		{
+			PartyFish.ControlMode.Wasd => 0,
+			PartyFish.ControlMode.Arrows => 1,
+			_ => -2
+		};
 	}
 
 	private PartyFish CreateAiEnemy(Vector2 position, bool variantTwo)
@@ -1333,6 +1355,7 @@ public partial class PartyMode : Control
 		ClearWorld();
 		DrawArena(true);
 		matchButtons.Show();
+		GameUi.FocusFirstButton(matchButtons);
 
 		if (p1MatchScore > p2MatchScore)
 			statusText = $"Spieler 1 gewinnt die Party {p1MatchScore}:{p2MatchScore}.";

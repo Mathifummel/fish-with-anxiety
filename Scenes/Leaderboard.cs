@@ -14,7 +14,17 @@ public partial class Leaderboard : Control
 	{
 		BuildLayout();
 		LoadLeaderboard();
+		GameUi.FocusFirstButton(this);
 		SceneTransition.FadeIn(GetTree(), 0.28f);
+	}
+
+	public override void _UnhandledInput(InputEvent inputEvent)
+	{
+		if (GameUi.IsCancelPressed(inputEvent))
+		{
+			GetViewport().SetInputAsHandled();
+			OnBackButtonPressed();
+		}
 	}
 
 	public override void _Process(double delta)
