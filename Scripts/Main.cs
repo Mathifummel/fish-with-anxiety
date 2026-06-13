@@ -1300,7 +1300,7 @@ public partial class Main : Node2D
 	private void CreateItemDirectionHint()
 	{
 		ItemHintArrow = new TextureRect();
-		ItemHintArrow.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Richtungszeiger.png");
+		ItemHintArrow.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Pfeil.png");
 		ItemHintArrow.CustomMinimumSize = new Vector2(96f, 58f);
 		ItemHintArrow.PivotOffset = new Vector2(48f, 29f);
 		ItemHintArrow.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;

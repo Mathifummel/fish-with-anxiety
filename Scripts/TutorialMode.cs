@@ -515,7 +515,7 @@ public partial class TutorialMode : Node2D
 		ui.AddChild(menuButton);
 
 		hintArrow = new TextureRect();
-		hintArrow.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Richtungszeiger.png");
+		hintArrow.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Pfeil.png");
 		hintArrow.CustomMinimumSize = new Vector2(96f, 58f);
 		hintArrow.PivotOffset = new Vector2(48f, 29f);
 		hintArrow.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
