@@ -19,6 +19,7 @@ public partial class PartySetup : Control
 	private Label roundsLabel;
 	private float visualTime = 0f;
 	private SetupStep step = SetupStep.Mode;
+	private bool singleMiniGameSelected = false;
 
 	public override void _Ready()
 	{
@@ -68,7 +69,7 @@ public partial class PartySetup : Control
 		AddChild(center);
 
 		PanelContainer panel = new PanelContainer();
-		panel.CustomMinimumSize = new Vector2(560f, 460f);
+		panel.CustomMinimumSize = new Vector2(560f, 520f);
 		panel.AddThemeStyleboxOverride("panel", GameUi.CreatePanelStyle());
 		center.AddChild(panel);
 
@@ -81,7 +82,7 @@ public partial class PartySetup : Control
 
 		content = new VBoxContainer();
 		content.Alignment = BoxContainer.AlignmentMode.Center;
-		content.AddThemeConstantOverride("separation", 14);
+		content.AddThemeConstantOverride("separation", 12);
 		margin.AddChild(content);
 
 		titleLabel = CreateLabel("", 34, GameUi.DarkText);
@@ -97,17 +98,34 @@ public partial class PartySetup : Control
 	private void ShowModeStep()
 	{
 		step = SetupStep.Mode;
+		singleMiniGameSelected = false;
 		ClearDynamicRows();
 		titleLabel.Text = "2-Spieler Modus";
-		infoLabel.Text = "Schnappt euch beide eine Tastaturhälfte und legt los.";
+		infoLabel.Text = "Spielt die ganze Party oder startet direkt ein einzelnes Minispiel.";
 
 		Button partyButton = CreateButton("Party-Modus");
-		partyButton.Pressed += ShowRoundsStep;
+		partyButton.Pressed += () =>
+		{
+			PartyState.SelectedGame = PartyState.GameSelection.Party;
+			ShowRoundsStep();
+		};
 		content.AddChild(partyButton);
 
-		Button comingSoon = CreateButton("Mehr kommt später");
-		comingSoon.Disabled = true;
-		content.AddChild(comingSoon);
+		Button catchButton = CreateButton("Fangen");
+		catchButton.Pressed += () => SelectSingleMiniGame(PartyState.GameSelection.Catch);
+		content.AddChild(catchButton);
+
+		Button coinsButton = CreateButton("Münzen sammeln");
+		coinsButton.Pressed += () => SelectSingleMiniGame(PartyState.GameSelection.Coins);
+		content.AddChild(coinsButton);
+
+		Button copsButton = CreateButton("Räuber und Gendarm");
+		copsButton.Pressed += () => SelectSingleMiniGame(PartyState.GameSelection.Cops);
+		content.AddChild(copsButton);
+
+		Button drunkButton = CreateButton("Betrunkener Run");
+		drunkButton.Pressed += () => SelectSingleMiniGame(PartyState.GameSelection.DrunkRun);
+		content.AddChild(drunkButton);
 
 		Button backButton = CreateButton("Zurück");
 		backButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
@@ -117,6 +135,8 @@ public partial class PartySetup : Control
 	private void ShowRoundsStep()
 	{
 		step = SetupStep.Rounds;
+		singleMiniGameSelected = false;
+		PartyState.Rounds = Mathf.Clamp(PartyState.Rounds, MinRounds, MaxRounds);
 		ClearDynamicRows();
 		titleLabel.Text = "Party-Modus";
 		infoLabel.Text = "Eine Party mischt kurze Runden aus Fangen, Münzjagd, Räuber und Gendarm und Betrunkenen Run.";
@@ -162,7 +182,7 @@ public partial class PartySetup : Control
 	{
 		step = SetupStep.Fish;
 		ClearDynamicRows();
-		titleLabel.Text = "Fischwahl";
+		titleLabel.Text = singleMiniGameSelected ? GetSelectionName(PartyState.SelectedGame) : "Fischwahl";
 		infoLabel.Text = "Spieler 1 schwimmt mit WASD. Spieler 2 jagt mit den Pfeiltasten.";
 
 		Label p1 = CreateLabel("Spieler 1: kleiner Fisch", 20, GameUi.DarkText);
@@ -196,13 +216,38 @@ public partial class PartySetup : Control
 		GameUi.ApplyButton(enemyTwo, 16, PartyState.OpponentSkin == NPCFish.EnemySkin.Gegnerfisch2);
 		row.AddChild(enemyTwo);
 
-		Button startButton = CreateButton("Party starten");
+		Button startButton = CreateButton(singleMiniGameSelected ? "Minispiel starten" : "Party starten");
 		startButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/PartyMode.tscn", 0.32f);
 		content.AddChild(startButton);
 
 		Button backButton = CreateButton("Zurück");
-		backButton.Pressed += ShowRoundsStep;
+		backButton.Pressed += () =>
+		{
+			if (singleMiniGameSelected)
+				ShowModeStep();
+			else
+				ShowRoundsStep();
+		};
 		content.AddChild(backButton);
+	}
+
+	private void SelectSingleMiniGame(PartyState.GameSelection selection)
+	{
+		singleMiniGameSelected = true;
+		PartyState.SelectedGame = selection;
+		PartyState.Rounds = 1;
+		ShowFishStep();
+	}
+
+	private string GetSelectionName(PartyState.GameSelection selection)
+	{
+		return selection switch
+		{
+			PartyState.GameSelection.Coins => "Münzen sammeln",
+			PartyState.GameSelection.Cops => "Räuber und Gendarm",
+			PartyState.GameSelection.DrunkRun => "Betrunkener Run",
+			_ => "Fangen"
+		};
 	}
 
 	private void UpdateRoundsLabel()
