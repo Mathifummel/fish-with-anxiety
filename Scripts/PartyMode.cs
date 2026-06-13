@@ -48,6 +48,7 @@ public partial class PartyMode : Control
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
 	private RoundState state = RoundState.Intro;
 	private MiniGame currentGame = MiniGame.Catch;
+	private bool singleGameMode = false;
 	private int totalRounds = 3;
 	private int roundIndex = 0;
 	private int p1MatchScore = 0;
@@ -77,7 +78,8 @@ public partial class PartyMode : Control
 	public override void _Ready()
 	{
 		rng.Randomize();
-		totalRounds = Mathf.Clamp(PartyState.Rounds, 3, 10);
+		singleGameMode = PartyState.SelectedGame != PartyState.GameSelection.Party;
+		totalRounds = singleGameMode ? 1 : Mathf.Clamp(PartyState.Rounds, 3, 10);
 		SetAnchorsPreset(LayoutPreset.FullRect);
 		BuildSplitScreen();
 		BuildOverlay();
@@ -419,7 +421,9 @@ public partial class PartyMode : Control
 		}
 
 		roundIndex++;
-		currentGame = gameOrder[(roundIndex - 1) % gameOrder.Length];
+		currentGame = singleGameMode
+			? GetSelectedMiniGame()
+			: gameOrder[(roundIndex - 1) % gameOrder.Length];
 		p1RoundScore = 0;
 		p2RoundScore = 0;
 		introTimer = 2.2f;
@@ -766,6 +770,17 @@ public partial class PartyMode : Control
 			MiniGame.Cops => "Räuber und Gendarm",
 			MiniGame.DrunkRun => "Betrunkener Run",
 			_ => "Fangen"
+		};
+	}
+
+	private MiniGame GetSelectedMiniGame()
+	{
+		return PartyState.SelectedGame switch
+		{
+			PartyState.GameSelection.Coins => MiniGame.Coins,
+			PartyState.GameSelection.Cops => MiniGame.Cops,
+			PartyState.GameSelection.DrunkRun => MiniGame.DrunkRun,
+			_ => MiniGame.Catch
 		};
 	}
 
