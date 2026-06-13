@@ -17,6 +17,8 @@ public partial class PassiveFish : CharacterBody2D
 	private float swimTime = 0f;
 	private float wanderPhase = 0f;
 	private int facingDirection = -1;
+	private Texture2D[] leftSwimFrames;
+	private Texture2D[] rightSwimFrames;
 
 	private Sprite2D fishSprite;
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
@@ -24,6 +26,16 @@ public partial class PassiveFish : CharacterBody2D
 	public override void _Ready()
 	{
 		fishSprite = GetNode<Sprite2D>("Sprite2D");
+		leftSwimFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2.png")
+		};
+		rightSwimFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1 1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2 1.png")
+		};
 		rng.Randomize();
 		RandomizeDirection();
 	}
@@ -54,6 +66,7 @@ public partial class PassiveFish : CharacterBody2D
 			swimTime += dt;
 
 			UpdateFacingDirection();
+			UpdateSwimFrame();
 
 			float moveAngle = Velocity.Angle();
 			float targetRotation =
@@ -67,8 +80,23 @@ public partial class PassiveFish : CharacterBody2D
 				targetRotation + wiggle,
 				dt * RotationSpeed
 			);
-			fishSprite.FlipH = facingDirection > 0;
 		}
+	}
+
+	private void UpdateSwimFrame()
+	{
+		Texture2D[] frames = facingDirection > 0 ? rightSwimFrames : leftSwimFrames;
+
+		if (frames == null || frames.Length == 0)
+			return;
+
+		int frameIndex = Mathf.PosMod((int)(swimTime * 6.5f), frames.Length);
+		Texture2D texture = frames[frameIndex];
+
+		if (texture != null && fishSprite.Texture != texture)
+			fishSprite.Texture = texture;
+
+		fishSprite.FlipH = false;
 	}
 
 	private void UpdateFacingDirection()

@@ -143,7 +143,7 @@ public partial class ScoreManager : Node
 		Error error = DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
 
 		if (error != Error.Ok)
-			GD.PushWarning($"Konnte Speicherdatei nicht loeschen: {path}");
+			GD.PushWarning($"Konnte Speicherdatei nicht löschen: {path}");
 	}
 
 	private void SaveTotalCoins()

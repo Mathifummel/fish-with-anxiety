@@ -96,6 +96,7 @@ public partial class PlayerFish : CharacterBody2D
 	private float swimTime = 0f;
 	private Texture2D[] leftSwimFrames;
 	private Texture2D[] rightSwimFrames;
+	private Texture2D[] drunkSwimFrames;
 	private int facingDirection = 1;
 
 	// smoother movement
@@ -113,6 +114,11 @@ public partial class PlayerFish : CharacterBody2D
 		{
 			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1 1.png"),
 			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2 1.png")
+		};
+		drunkSwimFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Bessofenerfisch1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Besoffenerfisch2.png")
 		};
 		LoadControlSettings();
 	}
@@ -338,7 +344,12 @@ public partial class PlayerFish : CharacterBody2D
 
 	private void UpdateSwimFrame()
 	{
-		Texture2D[] frames = facingDirection > 0 ? rightSwimFrames : leftSwimFrames;
+		bool useDrunkFrames = IsInvincible && drunkSwimFrames != null && drunkSwimFrames.Length > 0;
+		Texture2D[] frames = useDrunkFrames
+			? drunkSwimFrames
+			: facingDirection > 0
+				? rightSwimFrames
+				: leftSwimFrames;
 
 		if (frames == null || frames.Length == 0)
 			return;
@@ -349,7 +360,7 @@ public partial class PlayerFish : CharacterBody2D
 		if (texture != null && fishSprite.Texture != texture)
 			fishSprite.Texture = texture;
 
-		fishSprite.FlipH = false;
+		fishSprite.FlipH = useDrunkFrames && facingDirection > 0;
 	}
 
 	// =========================================
@@ -389,7 +400,13 @@ public partial class PlayerFish : CharacterBody2D
 		IsInvincible = active;
 
 		if (!active && fishSprite != null)
+		{
 			fishSprite.Modulate = Colors.White;
+			fishSprite.FlipH = false;
+		}
+
+		if (fishSprite != null)
+			UpdateSwimFrame();
 	}
 
 	private void UpdateInvincibleVisual()

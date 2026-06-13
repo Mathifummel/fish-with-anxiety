@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://djxypniq3tj4k"]
+
+[ext_resource type="Script" path="res://Scripts/TutorialMode.cs" id="1_tutorial"]
+[ext_resource type="PackedScene" uid="uid://d3nxti7twfqq7" path="res://Scenes/playerfish.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://gs6ux1kxikji" path="res://Scenes/npcfish.tscn" id="3_npc"]
+[ext_resource type="PackedScene" uid="uid://c8itemalk001" path="res://Scenes/item_alcohol.tscn" id="4_alcohol"]
+[ext_resource type="PackedScene" uid="uid://c8itemchor001" path="res://Scenes/item_chorusfruit.tscn" id="5_chorus"]
+[ext_resource type="PackedScene" uid="uid://c8itemtrsh001" path="res://Scenes/item_trash.tscn" id="6_trash"]
+
+[node name="Tutorial" type="Node2D" node_paths=PackedStringArray("Player")]
+script = ExtResource("1_tutorial")
+Player = NodePath("PlayerFish")
+NPCFishScene = ExtResource("3_npc")
+AlcoholItemScene = ExtResource("4_alcohol")
+ChorusFruitItemScene = ExtResource("5_chorus")
+TrashItemScene = ExtResource("6_trash")
+
+[node name="PlayerFish" parent="." instance=ExtResource("2_player")]

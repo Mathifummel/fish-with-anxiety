@@ -1,134 +1,81 @@
 [gd_scene format=3 uid="uid://ewrspq4ewljl"]
 
-[ext_resource type="Script" uid="uid://cxvloro5rw38w" path="res://Scripts/MainMenu.cs" id="1_tt5f1"]
-[ext_resource type="VideoStream" path="res://Assets/underwater.ogv" id="2_koqhg"]
-[ext_resource type="Texture2D" uid="uid://cw08k75mwrjh3" path="res://Assets/Logo.png" id="3_cmrfp"]
-[ext_resource type="Texture2D" uid="uid://br23fogajgnie" path="res://Assets/Spielen btn.png" id="4_loo7a"]
-[ext_resource type="Texture2D" uid="uid://boicoyo0kogo6" path="res://Assets/beenden btn.png" id="5_if7li"]
-[ext_resource type="Texture2D" uid="uid://bmbs61dafpmg1" path="res://Assets/credits btn.png" id="6_rrcx7"]
-[ext_resource type="Texture2D" uid="uid://ba2k1e2am1f32" path="res://Assets/Leaderboard btn.png" id="7_fh7cp"]
-[ext_resource type="Texture2D" uid="uid://b7etpuoekekhn" path="res://Assets/Einstellungen btn.png" id="8_8e205"]
+[ext_resource type="Script" uid="uid://cxvloro5rw38w" path="res://Scripts/MainMenu.cs" id="1_mainmenu"]
 
-[node name="MainMenu" type="Control" unique_id=1837657285]
+[node name="MainMenu" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 2.0
-offset_right = 2.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_tt5f1")
+script = ExtResource("1_mainmenu")
 
-[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1544823366]
-
-[node name="VideoStreamPlayer" type="VideoStreamPlayer" parent="CanvasLayer" unique_id=727737746]
+[node name="Background" type="SubViewportContainer" parent="."]
+layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-stream = ExtResource("2_koqhg")
-speed_scale = 2.57
-autoplay = true
-expand = true
-loop = true
+stretch = true
 
-[node name="TextureRect" type="TextureRect" parent="CanvasLayer" unique_id=2056393400]
-texture_filter = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -315.0
-offset_top = 67.0
-offset_right = 315.0
-offset_bottom = 187.0
-grow_horizontal = 2
-texture = ExtResource("3_cmrfp")
+[node name="SubViewport" type="SubViewport" parent="Background"]
+transparent_bg = false
+handle_input_locally = false
+size = Vector2i(1280, 720)
+render_target_update_mode = 4
 
-[node name="StartButton" type="Button" parent="CanvasLayer" unique_id=758862737]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -81.0
-offset_top = -60.101257
-offset_right = 81.0
-offset_bottom = -25.898743
+[node name="AeroTint" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/icon_max_width = 150
-text = "
-"
-icon = ExtResource("4_loo7a")
+mouse_filter = 2
+color = Color(0.72, 0.94, 1, 0.16)
 
-[node name="ExitButton" type="Button" parent="CanvasLayer" unique_id=1502548346]
-anchors_preset = 8
-anchor_left = 0.5
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="PanelLeft" type="PanelContainer" parent="UI"]
+anchors_preset = 13
 anchor_top = 0.5
-anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -81.0
-offset_top = 187.18494
-offset_right = 81.0
-offset_bottom = 218.81506
-grow_horizontal = 2
+offset_left = 32.0
+offset_top = -220.0
+offset_right = 332.0
+offset_bottom = 220.0
 grow_vertical = 2
-theme_override_constants/icon_max_width = 150
-text = "
-"
-icon = ExtResource("5_if7li")
 
-[node name="CreditsButton" type="Button" parent="CanvasLayer" unique_id=1576860885]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -76.0
-offset_top = 130.74112
-offset_right = 76.0
-offset_bottom = 163.25888
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/icon_max_width = 140
-text = "
-"
-icon = ExtResource("6_rrcx7")
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/PanelLeft"]
+layout_mode = 2
+alignment = 1
 
-[node name="LeaderboardButton" type="Button" parent="CanvasLayer" unique_id=891780190]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -124.0
-offset_top = 69.7876
-offset_right = 124.0
-offset_bottom = 102.21237
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/icon_max_width = 240
-icon = ExtResource("7_fh7cp")
+[node name="Klassisch" type="Button" parent="UI/PanelLeft/VBoxContainer"]
+layout_mode = 2
+text = "Klassisch"
 
-[node name="SettingsButton" type="Button" parent="CanvasLayer" unique_id=1028093489]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -134.0
-offset_top = 7.1818237
-offset_right = 134.0
-offset_bottom = 38.818176
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/icon_max_width = 260
-icon = ExtResource("8_8e205")
+[node name="Multiplayer" type="Button" parent="UI/PanelLeft/VBoxContainer"]
+layout_mode = 2
+text = "2-Spieler Modus"
 
-[connection signal="pressed" from="CanvasLayer/StartButton" to="." method="_on_button_pressed"]
-[connection signal="pressed" from="CanvasLayer/ExitButton" to="." method="_on_exit_button_pressed"]
-[connection signal="pressed" from="CanvasLayer/CreditsButton" to="." method="_on_credits_button_pressed"]
-[connection signal="pressed" from="CanvasLayer/LeaderboardButton" to="." method="OnLeaderboardPressed"]
-[connection signal="pressed" from="CanvasLayer/SettingsButton" to="." method="_on_settings_button_pressed"]
+[node name="Leaderboard" type="Button" parent="UI/PanelLeft/VBoxContainer"]
+layout_mode = 2
+text = "Leaderboard"
+
+[node name="Tutorial" type="Button" parent="UI/PanelLeft/VBoxContainer"]
+layout_mode = 2
+text = "Tutorial"
+
+[node name="Einstellungen" type="Button" parent="UI/PanelLeft/VBoxContainer"]
+layout_mode = 2
+text = "Einstellungen"
+
+[node name="Credits" type="Button" parent="UI/PanelLeft/VBoxContainer"]
+layout_mode = 2
+text = "Credits"
+
+[node name="Beenden" type="Button" parent="UI/PanelLeft/VBoxContainer"]
+layout_mode = 2
+text = "Beenden"

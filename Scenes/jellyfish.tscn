@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/Jellyfish.cs" id="1_jelly"]
+[ext_resource type="Texture2D" uid="uid://bor23vif64sck" path="res://Assets/Qualle.png" id="2_jelly"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_jelly"]
+radius = 32.0
+
+[node name="Jellyfish" type="CharacterBody2D" groups=["jellyfish"]]
+script = ExtResource("1_jelly")
+Speed = 74.0
+CollisionRadius = 32.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.72, 0.72)
+texture = ExtResource("2_jelly")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_jelly")

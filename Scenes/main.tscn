@@ -9,16 +9,19 @@
 [ext_resource type="PackedScene" uid="uid://c8itemalk001" path="res://Scenes/item_alcohol.tscn" id="6_alc"]
 [ext_resource type="PackedScene" uid="uid://c8itemchor001" path="res://Scenes/item_chorusfruit.tscn" id="7_chr"]
 [ext_resource type="PackedScene" uid="uid://c8itemtrsh001" path="res://Scenes/item_trash.tscn" id="8_trsh"]
+[ext_resource type="PackedScene" path="res://Scenes/jellyfish.tscn" id="9_jelly"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_8gbba"]
 
-[node name="Main" type="Node2D" unique_id=391988023 node_paths=PackedStringArray("Player", "NPCContainer", "PassiveFishContainer", "CoinContainer", "ObstacleContainer", "ItemContainer")]
+[node name="Main" type="Node2D" unique_id=391988023 node_paths=PackedStringArray("Player", "NPCContainer", "PassiveFishContainer", "JellyfishContainer", "CoinContainer", "ObstacleContainer", "ItemContainer")]
 script = ExtResource("1_bo1nx")
 Player = NodePath("PlayerFish")
 NPCContainer = NodePath("NPCContainer")
 NPCFishScene = ExtResource("2_jjvhh")
 PassiveFishContainer = NodePath("PassiveFishContainer")
 PassiveFishScene = ExtResource("3_21xkr")
+JellyfishContainer = NodePath("JellyfishContainer")
+JellyfishScene = ExtResource("9_jelly")
 CoinContainer = NodePath("CoinContainer")
 CoinScene = ExtResource("4_6bp64")
 ObstacleContainer = NodePath("ObstacleContainer")
@@ -39,6 +42,8 @@ TrashItemScene = ExtResource("8_trsh")
 [node name="NPCContainer" type="Node2D" parent="." unique_id=1649477768]
 
 [node name="PassiveFishContainer" type="Node2D" parent="." unique_id=954775697]
+
+[node name="JellyfishContainer" type="Node2D" parent="."]
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=1210839962]
 

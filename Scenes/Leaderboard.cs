@@ -79,11 +79,11 @@ public partial class Leaderboard : Control
 		content.SizeFlagsHorizontal = SizeFlags.Fill;
 		boardMargin.AddChild(content);
 
-		Label title = CreateLabel("Bestenliste", 42, new Color(0.92f, 0.98f, 1f));
+		Label title = CreateLabel("Bestenliste", 42, GameUi.DarkText);
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(title);
 
-		SummaryLabel = CreateLabel("", 16, new Color(0.62f, 0.78f, 0.84f));
+		SummaryLabel = CreateLabel("", 16, new Color(0.05f, 0.22f, 0.34f, 0.82f));
 		SummaryLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(SummaryLabel);
 
@@ -158,7 +158,7 @@ public partial class Leaderboard : Control
 		PanelContainer panel = new PanelContainer();
 		panel.CustomMinimumSize = new Vector2(BoardWidth - 60, 38);
 		panel.SizeFlagsHorizontal = SizeFlags.Fill;
-		panel.AddThemeStyleboxOverride("panel", CreateRowStyle(new Color(0.08f, 0.22f, 0.28f, 0.95f), 1f));
+		panel.AddThemeStyleboxOverride("panel", CreateRowStyle(new Color(1f, 1f, 1f, 0.58f), 0.86f));
 
 		MarginContainer margin = CreateRowMargin();
 		panel.AddChild(margin);
@@ -207,10 +207,10 @@ public partial class Leaderboard : Control
 	private PanelContainer CreateScoreRow(int rank, string name, int score)
 	{
 		Color bgColor = rank == 1
-			? new Color(0.12f, 0.36f, 0.42f, 0.92f)
+			? new Color(0.82f, 0.96f, 1f, 0.72f)
 			: rank % 2 == 0
-				? new Color(0.05f, 0.15f, 0.2f, 0.82f)
-				: new Color(0.04f, 0.12f, 0.17f, 0.82f);
+				? new Color(1f, 1f, 1f, 0.5f)
+				: new Color(1f, 1f, 1f, 0.42f);
 
 		PanelContainer panel = new PanelContainer();
 		panel.CustomMinimumSize = new Vector2(BoardWidth - 60, 42);
@@ -233,7 +233,7 @@ public partial class Leaderboard : Control
 
 	private Label CreateEmptyState()
 	{
-		Label label = CreateLabel("Spiele eine Runde, speichere deinen Namen und hier erscheint dein Score.", 18, new Color(0.7f, 0.84f, 0.88f));
+		Label label = CreateLabel("Spiele eine Runde, speichere deinen Namen und hier erscheint dein Score.", 18, GameUi.DarkText);
 		label.HorizontalAlignment = HorizontalAlignment.Center;
 		label.VerticalAlignment = VerticalAlignment.Center;
 		label.SizeFlagsVertical = SizeFlags.ExpandFill;
@@ -243,7 +243,7 @@ public partial class Leaderboard : Control
 
 	private Label CreateCell(string text, float ratio, HorizontalAlignment alignment, bool bold)
 	{
-		Label label = CreateLabel(text, bold ? 19 : 18, bold ? new Color(0.94f, 1f, 0.98f) : new Color(0.8f, 0.92f, 0.95f));
+		Label label = CreateLabel(text, bold ? 19 : 18, GameUi.DarkText);
 		label.HorizontalAlignment = alignment;
 		label.VerticalAlignment = VerticalAlignment.Center;
 		label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -255,11 +255,7 @@ public partial class Leaderboard : Control
 	{
 		Label label = new Label();
 		label.Text = text;
-		label.AddThemeFontSizeOverride("font_size", fontSize);
-		label.AddThemeColorOverride("font_color", color);
-		label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.55f));
-		label.AddThemeConstantOverride("shadow_offset_x", 2);
-		label.AddThemeConstantOverride("shadow_offset_y", 2);
+		GameUi.ApplyLabel(label, fontSize, color);
 		return label;
 	}
 
@@ -268,12 +264,7 @@ public partial class Leaderboard : Control
 		Button button = new Button();
 		button.Text = text;
 		button.CustomMinimumSize = new Vector2(170, 42);
-		button.AddThemeFontSizeOverride("font_size", 18);
-		button.AddThemeStyleboxOverride("normal", CreateButtonStyle(new Color(0.03f, 0.16f, 0.22f, 0.88f)));
-		button.AddThemeStyleboxOverride("hover", CreateButtonStyle(new Color(0.07f, 0.27f, 0.34f, 0.94f)));
-		button.AddThemeStyleboxOverride("pressed", CreateButtonStyle(new Color(0.02f, 0.11f, 0.16f, 0.96f)));
-		button.AddThemeColorOverride("font_color", new Color(0.9f, 0.98f, 1f));
-		button.AddThemeColorOverride("font_hover_color", new Color(1f, 1f, 1f));
+		GameUi.ApplyButton(button);
 		return button;
 	}
 
@@ -289,50 +280,17 @@ public partial class Leaderboard : Control
 
 	private StyleBoxFlat CreateBoardStyle()
 	{
-		StyleBoxFlat style = new StyleBoxFlat();
-		style.BgColor = new Color(0.02f, 0.1f, 0.15f, 0.76f);
-		style.BorderColor = new Color(0.45f, 0.82f, 0.9f, 0.48f);
-		style.BorderWidthLeft = 2;
-		style.BorderWidthTop = 2;
-		style.BorderWidthRight = 2;
-		style.BorderWidthBottom = 2;
-		style.CornerRadiusTopLeft = 8;
-		style.CornerRadiusTopRight = 8;
-		style.CornerRadiusBottomLeft = 8;
-		style.CornerRadiusBottomRight = 8;
-		return style;
+		return GameUi.CreatePanelStyle();
 	}
 
 	private StyleBoxFlat CreateButtonStyle(Color color)
 	{
-		StyleBoxFlat style = new StyleBoxFlat();
-		style.BgColor = color;
-		style.BorderColor = new Color(0.54f, 0.86f, 0.94f, 0.48f);
-		style.BorderWidthLeft = 1;
-		style.BorderWidthTop = 1;
-		style.BorderWidthRight = 1;
-		style.BorderWidthBottom = 1;
-		style.CornerRadiusTopLeft = 7;
-		style.CornerRadiusTopRight = 7;
-		style.CornerRadiusBottomLeft = 7;
-		style.CornerRadiusBottomRight = 7;
-		return style;
+		return GameUi.CreateButtonStyle(color, GameUi.ButtonBorder);
 	}
 
 	private StyleBoxFlat CreateRowStyle(Color color, float borderAlpha)
 	{
-		StyleBoxFlat style = new StyleBoxFlat();
-		style.BgColor = color;
-		style.BorderColor = new Color(0.5f, 0.82f, 0.9f, borderAlpha);
-		style.BorderWidthLeft = 1;
-		style.BorderWidthTop = 1;
-		style.BorderWidthRight = 1;
-		style.BorderWidthBottom = 1;
-		style.CornerRadiusTopLeft = 6;
-		style.CornerRadiusTopRight = 6;
-		style.CornerRadiusBottomLeft = 6;
-		style.CornerRadiusBottomRight = 6;
-		return style;
+		return GameUi.CreateRowStyle(color, borderAlpha);
 	}
 
 	private string FormatName(string name)

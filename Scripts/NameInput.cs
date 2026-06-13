@@ -10,7 +10,10 @@ public partial class NameInput : Control
 	private CanvasLayer backdropLayer;
 	private Node2D deathFishLayer;
 	private Sprite2D fallenPlayerFish;
-	private Sprite2D[] chasingFish = new Sprite2D[3];
+	private Sprite2D[] chasingFish = new Sprite2D[5];
+	private Texture2D[] fallenFishFrames;
+	private Texture2D[] chasingFishFrames;
+	private Texture2D[] chasingFishAltFrames;
 	private Control resultPanelHost;
 	private Label timerLabel;
 	private Label coinLabel;
@@ -130,24 +133,24 @@ public partial class NameInput : Control
 		content.AddThemeConstantOverride("separation", 13);
 		panelMargin.AddChild(content);
 
-		Label title = CreateLabel("Spiel vorbei", 40, new Color(0.94f, 1f, 0.98f));
+		Label title = CreateLabel("Spiel vorbei", 40, GameUi.DarkText);
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(title);
 
-		Label subtitle = CreateLabel("Puh, Kurz durchatmen. Das war viel!", 18, new Color(0.78f, 0.92f, 0.95f));
+		Label subtitle = CreateLabel("Kurz durchatmen. Dein Fisch hat alles gegeben.", 18, new Color(0.05f, 0.22f, 0.34f, 0.82f));
 		subtitle.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(subtitle);
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 
-		Label scoreLabel = CreateLabel($"Score: {sm.CurrentScore}", 24, new Color(0.9f, 0.98f, 1f));
+		Label scoreLabel = CreateLabel($"Score: {sm.CurrentScore}", 24, GameUi.DarkText);
 		scoreLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(scoreLabel);
 
 		timerLabel = CreateLabel(
 			$"Entscheidung: {DecisionDuration:0}s",
 			22,
-			new Color(1f, 0.72f, 0.72f)
+			new Color(0.64f, 0.1f, 0.14f)
 		);
 		timerLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(timerLabel);
@@ -155,7 +158,7 @@ public partial class NameInput : Control
 		coinLabel = CreateLabel(
 			$"Münzen diese Runde: {sm.CoinsThisRun}  |  Gesamt: {sm.TotalCoins}",
 			20,
-			new Color(0.98f, 0.9f, 0.34f)
+			new Color(0.48f, 0.36f, 0.02f)
 		);
 		coinLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(coinLabel);
@@ -169,18 +172,18 @@ public partial class NameInput : Control
 		content.AddChild(reviveButton);
 		UpdateReviveButton();
 
-		Label prompt = CreateLabel("Name für die Bestenliste", 18, new Color(0.72f, 0.88f, 0.92f));
+		Label prompt = CreateLabel("Name für die Bestenliste", 18, new Color(0.05f, 0.22f, 0.34f, 0.82f));
 		prompt.HorizontalAlignment = HorizontalAlignment.Center;
 		content.AddChild(prompt);
 
 		nameField = new LineEdit();
-		nameField.PlaceholderText = "Player";
+		nameField.PlaceholderText = "Dein Name";
 		nameField.Alignment = HorizontalAlignment.Center;
 		nameField.CustomMinimumSize = new Vector2(0, 48);
 		nameField.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-		nameField.AddThemeFontSizeOverride("font_size", 22);
-		nameField.AddThemeColorOverride("font_color", new Color(0.94f, 1f, 0.98f));
-		nameField.AddThemeColorOverride("font_placeholder_color", new Color(0.72f, 0.87f, 0.9f, 0.62f));
+		GameUi.ApplyFont(nameField, 22);
+		nameField.AddThemeColorOverride("font_color", GameUi.DarkText);
+		nameField.AddThemeColorOverride("font_placeholder_color", new Color(0.05f, 0.22f, 0.34f, 0.62f));
 		nameField.AddThemeStyleboxOverride("normal", CreateInputStyle(false));
 		nameField.AddThemeStyleboxOverride("focus", CreateInputStyle(true));
 		nameField.TextSubmitted += OnLineEditTextSubmitted;
@@ -223,12 +226,31 @@ public partial class NameInput : Control
 		deathFishLayer.Name = "DeathBackdropFish";
 		backdropLayer.AddChild(deathFishLayer);
 
-		fallenPlayerFish = CreateBackdropFish("res://Assets/MainCharacter.png", new Vector2(0.3f, 0.3f), 0.42f);
+		fallenFishFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1 1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2 1.png")
+		};
+		chasingFishFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfischframe1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfischframe2.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfischframe3.png")
+		};
+		chasingFishAltFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfisch2frame1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfisch2frame2.png")
+		};
+
+		fallenPlayerFish = CreateBackdropFish(fallenFishFrames[0], new Vector2(0.88f, 0.88f), 0.42f);
 		deathFishLayer.AddChild(fallenPlayerFish);
 
 		for (int i = 0; i < chasingFish.Length; i++)
 		{
-			chasingFish[i] = CreateBackdropFish("res://Assets/EnemyCharacter.png", new Vector2(0.2f, 0.2f), 0.3f - i * 0.045f);
+			Texture2D texture = i % 2 == 0 ? chasingFishFrames[0] : chasingFishAltFrames[0];
+			chasingFish[i] = CreateBackdropFish(texture, new Vector2(0.9f - i * 0.035f, 0.9f - i * 0.035f), 0.32f - i * 0.035f);
+			chasingFish[i].FlipH = true;
 			deathFishLayer.AddChild(chasingFish[i]);
 		}
 
@@ -243,10 +265,10 @@ public partial class NameInput : Control
 		);
 	}
 
-	private Sprite2D CreateBackdropFish(string texturePath, Vector2 scale, float alpha)
+	private Sprite2D CreateBackdropFish(Texture2D texture, Vector2 scale, float alpha)
 	{
 		Sprite2D fish = new Sprite2D();
-		fish.Texture = ResourceLoader.Load<Texture2D>(texturePath);
+		fish.Texture = texture;
 		fish.Scale = scale;
 		fish.Modulate = new Color(1f, 1f, 1f, alpha);
 		return fish;
@@ -307,6 +329,9 @@ public partial class NameInput : Control
 		deathLastLeaderPos = leaderPos;
 
 		float panic = Mathf.Max(0f, 1f - effectTimer / 1.6f);
+		if (fallenFishFrames != null && fallenFishFrames.Length > 0)
+			fallenPlayerFish.Texture = fallenFishFrames[Mathf.PosMod((int)(effectTimer * 5.8f), fallenFishFrames.Length)];
+
 		fallenPlayerFish.Position = leaderPos;
 		BackdropFishSwim.ApplyUprightRotation(
 			fallenPlayerFish,
@@ -327,7 +352,14 @@ public partial class NameInput : Control
 		);
 
 		for (int i = 0; i < chasingFish.Length; i++)
-			chasingFish[i].Modulate = new Color(1f, 1f, 1f, 0.28f - i * 0.035f);
+		{
+			Texture2D[] frames = i % 2 == 0 ? chasingFishFrames : chasingFishAltFrames;
+			if (frames != null && frames.Length > 0)
+				chasingFish[i].Texture = frames[Mathf.PosMod((int)(effectTimer * (7.2f + i * 0.3f)), frames.Length)];
+
+			chasingFish[i].FlipH = true;
+			chasingFish[i].Modulate = new Color(1f, 1f, 1f, 0.3f - i * 0.035f);
+		}
 	}
 
 	private void AnimateResultPanel()
@@ -381,11 +413,7 @@ public partial class NameInput : Control
 	{
 		Label label = new Label();
 		label.Text = text;
-		label.AddThemeFontSizeOverride("font_size", fontSize);
-		label.AddThemeColorOverride("font_color", color);
-		label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.65f));
-		label.AddThemeConstantOverride("shadow_offset_x", 2);
-		label.AddThemeConstantOverride("shadow_offset_y", 2);
+		GameUi.ApplyLabel(label, fontSize, color);
 		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		return label;
 	}
@@ -395,67 +423,23 @@ public partial class NameInput : Control
 		Button button = new Button();
 		button.Text = text;
 		button.CustomMinimumSize = new Vector2(150, 42);
-		button.AddThemeFontSizeOverride("font_size", 18);
-		button.AddThemeStyleboxOverride("normal", CreateButtonStyle(new Color(0.03f, 0.16f, 0.22f, 0.88f)));
-		button.AddThemeStyleboxOverride("hover", CreateButtonStyle(new Color(0.07f, 0.27f, 0.34f, 0.94f)));
-		button.AddThemeStyleboxOverride("pressed", CreateButtonStyle(new Color(0.02f, 0.11f, 0.16f, 0.96f)));
-		button.AddThemeColorOverride("font_color", new Color(0.9f, 0.98f, 1f));
-		button.AddThemeColorOverride("font_hover_color", new Color(1f, 1f, 1f));
+		GameUi.ApplyButton(button);
 		return button;
 	}
 
 	private StyleBoxFlat CreatePanelStyle()
 	{
-		StyleBoxFlat style = new StyleBoxFlat();
-		style.BgColor = new Color(0.015f, 0.085f, 0.13f, 0.84f);
-		style.BorderColor = new Color(0.49f, 0.86f, 0.93f, 0.56f);
-		style.BorderWidthLeft = 2;
-		style.BorderWidthTop = 2;
-		style.BorderWidthRight = 2;
-		style.BorderWidthBottom = 2;
-		style.CornerRadiusTopLeft = 8;
-		style.CornerRadiusTopRight = 8;
-		style.CornerRadiusBottomLeft = 8;
-		style.CornerRadiusBottomRight = 8;
-		return style;
+		return GameUi.CreatePanelStyle();
 	}
 
 	private StyleBoxFlat CreateInputStyle(bool focused)
 	{
-		StyleBoxFlat style = new StyleBoxFlat();
-		style.BgColor = focused
-			? new Color(0.04f, 0.18f, 0.24f, 0.9f)
-			: new Color(0.015f, 0.09f, 0.13f, 0.78f);
-		style.BorderColor = focused
-			? new Color(0.66f, 0.96f, 1f, 0.78f)
-			: new Color(0.42f, 0.74f, 0.82f, 0.45f);
-		style.BorderWidthLeft = 2;
-		style.BorderWidthTop = 2;
-		style.BorderWidthRight = 2;
-		style.BorderWidthBottom = 2;
-		style.ContentMarginLeft = 14;
-		style.ContentMarginRight = 14;
-		style.CornerRadiusTopLeft = 7;
-		style.CornerRadiusTopRight = 7;
-		style.CornerRadiusBottomLeft = 7;
-		style.CornerRadiusBottomRight = 7;
-		return style;
+		return GameUi.CreateInputStyle(focused);
 	}
 
 	private StyleBoxFlat CreateButtonStyle(Color color)
 	{
-		StyleBoxFlat style = new StyleBoxFlat();
-		style.BgColor = color;
-		style.BorderColor = new Color(0.54f, 0.86f, 0.94f, 0.48f);
-		style.BorderWidthLeft = 1;
-		style.BorderWidthTop = 1;
-		style.BorderWidthRight = 1;
-		style.BorderWidthBottom = 1;
-		style.CornerRadiusTopLeft = 7;
-		style.CornerRadiusTopRight = 7;
-		style.CornerRadiusBottomLeft = 7;
-		style.CornerRadiusBottomRight = 7;
-		return style;
+		return GameUi.CreateButtonStyle(color, GameUi.ButtonBorder);
 	}
 
 	private void UpdateDecisionTimer(float dt)
@@ -490,7 +474,7 @@ public partial class NameInput : Control
 		if (decisionExpired)
 			reviveButton.Text = "Zeit abgelaufen";
 		else if (!canAfford)
-			reviveButton.Text = $"Wiederbeleben ({ScoreManager.RevivalCost} Münzen) - zu wenig";
+			reviveButton.Text = $"Wiederbeleben ({ScoreManager.RevivalCost} Münzen) - noch zu wenig";
 		else
 			reviveButton.Text = $"Wiederbeleben ({ScoreManager.RevivalCost} Münzen)";
 	}
@@ -569,7 +553,7 @@ public partial class NameInput : Control
 		string playerName = nameField.Text.Trim();
 
 		if (string.IsNullOrEmpty(playerName))
-			playerName = "Player";
+			playerName = "Spieler";
 
 		GetNode<ScoreManager>("/root/ScoreManager").SaveScore(playerName);
 		scoreSaved = true;

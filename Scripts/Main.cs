@@ -4,6 +4,7 @@ using System.Collections.Generic;
 public partial class Main : Node2D
 {
 	[Export] public PlayerFish Player;
+	[Export] public bool MenuPreviewMode = false;
 
 	// EXISTING NPCS (aggressive)
 	[Export] public Node2D NPCContainer;
@@ -12,6 +13,10 @@ public partial class Main : Node2D
 	// NEW PASSIVE FISH
 	[Export] public Node2D PassiveFishContainer;
 	[Export] public PackedScene PassiveFishScene;
+
+	// JELLYFISH (threat, but not a direct chaser)
+	[Export] public Node2D JellyfishContainer;
+	[Export] public PackedScene JellyfishScene;
 
 	// NEW COINS
 	[Export] public Node2D CoinContainer;
@@ -41,6 +46,9 @@ public partial class Main : Node2D
 	[Export] public float PassiveDangerRadius = 240f;
 	[Export] public float PassiveContactRadius = 36f;
 	[Export] public float PassiveStressWeight = 0.32f;
+	[Export] public float JellyfishDangerRadius = 330f;
+	[Export] public float JellyfishContactRadius = 48f;
+	[Export] public float JellyfishStressWeight = 0.72f;
 	[Export] public float StressTargetPerThreat = 58f;
 	[Export] public float ContactStressTargetBonus = 28f;
 
@@ -60,11 +68,13 @@ public partial class Main : Node2D
 
 	[Export] public int InitialNPCCount = 2;
 	[Export] public int InitialPassiveFishCount = 5;
+	[Export] public int InitialJellyfishCount = 0;
 	[Export] public int InitialCoinCount = 6;
 	[Export] public int InitialObstacleCount = 4;
 
 	[Export] public int TargetNPCCount = 7;
 	[Export] public int TargetPassiveFishCount = 14;
+	[Export] public int TargetJellyfishCount = 0;
 	[Export] public int TargetCoinCount = 18;
 	[Export] public int TargetObstacleCount = 10;
 
@@ -74,11 +84,15 @@ public partial class Main : Node2D
 	[Export] public float SwarmSpawnDistance = 920f;
 	[Export] public float SwarmSpacing = 126f;
 	[Export] public float SwarmSpawnDelay = 2.8f;
-	[Export] public int LevelThreeRampScoreStep = 1300;
+	[Export] public int LevelTwoScore = 1200;
+	[Export] public int LevelThreeScore = 2500;
+	[Export] public int LevelFourScore = 3750;
+	[Export] public int LevelFiveScore = 5000;
 
-	[Export] public int MinAlcoholLevel = 3;
+	[Export] public int MinJellyfishLevel = 2;
+	[Export] public int MinAlcoholLevel = 4;
 	[Export] public int MinChorusFruitLevel = 2;
-	[Export] public int MinTrashLevel = 2;
+	[Export] public int MinTrashLevel = 3;
 	[Export] public float TrashSlowMultiplier = 0.52f;
 	[Export] public float TrashSlowDuration = 5.5f;
 	[Export] public int MaxItemsInWorld = 1;
@@ -104,11 +118,19 @@ public partial class Main : Node2D
 	private Label ItemEffectLabel;
 	private TextureRect ItemHintArrow;
 	private Label ItemHintText;
+	private Button PauseButton;
+	private ColorRect PauseBackdrop;
+	private Panel PausePanel;
+	private VBoxContainer PauseCustomBindings;
+	private Label PauseCaptureLabel;
+	private Label PauseStatusLabel;
+	private Button PauseConfirmButton;
 	private float invincibilityTimer = 0f;
 
 	private float Stress = 0f;
 	private float countdownTimer = 0f;
 	private bool gameStarted = false;
+	private bool gamePaused = false;
 	private float spawnCheckTimer = 0f;
 	private Vector2 lastStreamPosition = Vector2.Zero;
 	private int currentLevel = 1;
@@ -117,6 +139,7 @@ public partial class Main : Node2D
 	private float itemHintTimer = 0f;
 	private float npcSpeedMultiplier = 1f;
 	private float passiveSpeedMultiplier = 1f;
+	private float jellyfishSpeedMultiplier = 1f;
 	private int pendingSwarmCount = 0;
 	private float pendingSwarmTimer = 0f;
 	private VideoStreamPlayer backgroundVideo;
@@ -124,9 +147,14 @@ public partial class Main : Node2D
 	private Vector2 backgroundScroll = Vector2.Zero;
 	private Vector2 backgroundScrollVelocity = Vector2.Zero;
 	private bool gameOverTriggered = false;
+	private string pendingPauseCustomAction = "";
+	private float pauseConfirmationTimer = 0f;
 
 	private StyleBoxFlat stressFillStyle;
 	private StyleBoxFlat stressBackgroundStyle;
+	private readonly Dictionary<PlayerFish.ControlScheme, Button> pauseModeButtons =
+		new Dictionary<PlayerFish.ControlScheme, Button>();
+	private readonly Dictionary<string, Button> pauseCustomButtons = new Dictionary<string, Button>();
 
 	public override void _Ready()
 	{
@@ -140,6 +168,13 @@ public partial class Main : Node2D
 		CreateLevelNoticeLabel();
 		CreateItemEffectLabel();
 		CreateItemDirectionHint();
+		CreatePauseMenu();
+
+		if (MenuPreviewMode)
+		{
+			SetupMenuPreviewRun();
+			return;
+		}
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 
@@ -158,11 +193,14 @@ public partial class Main : Node2D
 		lastStreamPosition = Player.Position;
 		Player.SetPhysicsProcess(false);
 		gameOverTriggered = false;
+		gamePaused = false;
 		currentLevel = 1;
 		Stress = 0f;
 		itemHintTimer = 0f;
 		ResetItemHintCooldown();
 		HideItemDirectionHint();
+		HidePauseMenu();
+		PauseButton?.Hide();
 
 		SpawnInitialWorld();
 	}
@@ -173,6 +211,7 @@ public partial class Main : Node2D
 		sm.StartScoring();
 
 		gameOverTriggered = false;
+		gamePaused = false;
 		gameStarted = true;
 		currentLevel = sm.SavedLevel;
 		Stress = Mathf.Clamp(sm.SavedStress, 0f, 85f);
@@ -187,6 +226,8 @@ public partial class Main : Node2D
 		itemHintTimer = 0f;
 		ResetItemHintCooldown();
 		HideItemDirectionHint();
+		HidePauseMenu();
+		PauseButton?.Show();
 
 		ApplyLevelSettings(currentLevel, false);
 		SpawnInitialWorld();
@@ -205,8 +246,41 @@ public partial class Main : Node2D
 		for (int i = 0; i < InitialPassiveFishCount; i++)
 			SpawnPassiveFish();
 
+		for (int i = 0; i < InitialJellyfishCount; i++)
+			SpawnJellyfish();
+
 		for (int i = 0; i < InitialCoinCount; i++)
 			SpawnCoin();
+	}
+
+	private void SetupMenuPreviewRun()
+	{
+		gameOverTriggered = false;
+		gamePaused = false;
+		gameStarted = true;
+		currentLevel = 3;
+		Stress = 0f;
+		countdownTimer = 0f;
+		lastStreamPosition = Player.Position;
+
+		CanvasLayer ui = GetNodeOrNull<CanvasLayer>("UI");
+		if (ui != null)
+			ui.Visible = false;
+
+		Player.SetPhysicsProcess(false);
+		Player.CurrentStress = 0f;
+		CountdownLabel?.Hide();
+		HideItemDirectionHint();
+		HidePauseMenu();
+		PauseButton?.Hide();
+
+		ApplyLevelSettings(currentLevel, false);
+		SpawnInitialWorld();
+		FillContainer(NPCContainer, Mathf.Min(TargetNPCCount, 6), SpawnNPC);
+		FillContainer(PassiveFishContainer, Mathf.Min(TargetPassiveFishCount, 10), SpawnPassiveFish);
+		FillContainer(JellyfishContainer, Mathf.Min(TargetJellyfishCount, 3), SpawnJellyfish);
+		FillContainer(CoinContainer, Mathf.Min(TargetCoinCount, 8), SpawnCoin);
+		FillContainer(ObstacleContainer, Mathf.Min(TargetObstacleCount, 6), SpawnObstacle);
 	}
 
 	public override void _Process(double delta)
@@ -214,6 +288,19 @@ public partial class Main : Node2D
 		float dt = (float)delta;
 		backgroundTime += dt;
 		AnimateBackground(dt);
+
+		if (gamePaused)
+		{
+			UpdatePauseConfirmation(dt);
+			return;
+		}
+
+		if (MenuPreviewMode)
+		{
+			UpdatePendingSwarm(dt);
+			UpdateWorldStreaming(dt);
+			return;
+		}
 
 		if (!gameStarted)
 		{
@@ -352,11 +439,7 @@ public partial class Main : Node2D
 		ScoreLabel.OffsetRight = -24;
 		ScoreLabel.OffsetBottom = 48;
 		ScoreLabel.HorizontalAlignment = HorizontalAlignment.Right;
-		ScoreLabel.AddThemeFontSizeOverride("font_size", 22);
-		ScoreLabel.AddThemeColorOverride("font_color", new Color(0.93f, 0.98f, 1f));
-		ScoreLabel.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.65f));
-		ScoreLabel.AddThemeConstantOverride("shadow_offset_x", 2);
-		ScoreLabel.AddThemeConstantOverride("shadow_offset_y", 2);
+		GameUi.ApplyLabel(ScoreLabel, 22, GameUi.LightText);
 
 		CoinLabel = new Label();
 		CoinLabel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
@@ -365,12 +448,396 @@ public partial class Main : Node2D
 		CoinLabel.OffsetRight = -24;
 		CoinLabel.OffsetBottom = 78;
 		CoinLabel.HorizontalAlignment = HorizontalAlignment.Right;
-		CoinLabel.AddThemeFontSizeOverride("font_size", 20);
-		CoinLabel.AddThemeColorOverride("font_color", new Color(0.98f, 0.9f, 0.34f));
-		CoinLabel.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.65f));
-		CoinLabel.AddThemeConstantOverride("shadow_offset_x", 2);
-		CoinLabel.AddThemeConstantOverride("shadow_offset_y", 2);
+		GameUi.ApplyLabel(CoinLabel, 20, new Color(0.98f, 0.9f, 0.34f));
 		GetNode<CanvasLayer>("UI").AddChild(CoinLabel);
+	}
+
+	private void CreatePauseMenu()
+	{
+		CanvasLayer ui = GetNode<CanvasLayer>("UI");
+
+		PauseButton = new Button();
+		PauseButton.Text = "Pause";
+		PauseButton.CustomMinimumSize = new Vector2(96, 38);
+		PauseButton.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+		PauseButton.OffsetLeft = -344;
+		PauseButton.OffsetTop = 18;
+		PauseButton.OffsetRight = -242;
+		PauseButton.OffsetBottom = 58;
+		PauseButton.FocusMode = Control.FocusModeEnum.None;
+		ApplyPauseButtonStyle(PauseButton, false);
+		PauseButton.Pressed += () => SetGameplayPaused(true);
+		PauseButton.Hide();
+		ui.AddChild(PauseButton);
+
+		PauseBackdrop = new ColorRect();
+		PauseBackdrop.Visible = false;
+		PauseBackdrop.Color = new Color(0f, 0.03f, 0.05f, 0.58f);
+		PauseBackdrop.MouseFilter = Control.MouseFilterEnum.Stop;
+		PauseBackdrop.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		ui.AddChild(PauseBackdrop);
+
+		PausePanel = new Panel();
+		PausePanel.Visible = false;
+		PausePanel.AnchorLeft = 0.5f;
+		PausePanel.AnchorTop = 0.5f;
+		PausePanel.AnchorRight = 0.5f;
+		PausePanel.AnchorBottom = 0.5f;
+		PausePanel.OffsetLeft = -260;
+		PausePanel.OffsetTop = -305;
+		PausePanel.OffsetRight = 260;
+		PausePanel.OffsetBottom = 305;
+		PausePanel.AddThemeStyleboxOverride(
+			"panel",
+			CreatePausePanelStyle(new Color(0.02f, 0.12f, 0.17f, 0.97f))
+		);
+		ui.AddChild(PausePanel);
+
+		VBoxContainer layout = new VBoxContainer();
+		layout.AnchorRight = 1f;
+		layout.AnchorBottom = 1f;
+		layout.OffsetLeft = 30;
+		layout.OffsetTop = 24;
+		layout.OffsetRight = -30;
+		layout.OffsetBottom = -24;
+		layout.AddThemeConstantOverride("separation", 9);
+		PausePanel.AddChild(layout);
+
+		Label title = new Label();
+		title.Text = "Pausiert";
+		title.HorizontalAlignment = HorizontalAlignment.Center;
+		GameUi.ApplyLabel(title, 30, GameUi.DarkText);
+		layout.AddChild(title);
+
+		Label sectionLabel = new Label();
+		sectionLabel.Text = "Steuerung";
+		GameUi.ApplyLabel(sectionLabel, 17, new Color(0.05f, 0.22f, 0.34f, 0.82f));
+		layout.AddChild(sectionLabel);
+
+		AddPauseModeButton(layout, "Pfeiltasten", PlayerFish.ControlScheme.ArrowKeys);
+		AddPauseModeButton(layout, "WASD", PlayerFish.ControlScheme.WASD);
+		AddPauseModeButton(layout, "Maussteuerung", PlayerFish.ControlScheme.Mouse);
+		AddPauseModeButton(layout, "Eigene Tasten", PlayerFish.ControlScheme.Custom);
+
+		PauseCustomBindings = new VBoxContainer();
+		PauseCustomBindings.Visible = PlayerFish.CurrentControlScheme == PlayerFish.ControlScheme.Custom;
+		PauseCustomBindings.AddThemeConstantOverride("separation", 6);
+		layout.AddChild(PauseCustomBindings);
+
+		AddPauseCustomBindingButton("Hoch", PlayerFish.CustomMoveUp);
+		AddPauseCustomBindingButton("Runter", PlayerFish.CustomMoveDown);
+		AddPauseCustomBindingButton("Links", PlayerFish.CustomMoveLeft);
+		AddPauseCustomBindingButton("Rechts", PlayerFish.CustomMoveRight);
+		AddPauseCustomBindingButton("Boost", PlayerFish.CustomBoost);
+
+		PauseCaptureLabel = new Label();
+		PauseCaptureLabel.Text = "";
+		PauseCaptureLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		GameUi.ApplyLabel(PauseCaptureLabel, 14, new Color(0.48f, 0.36f, 0.02f));
+		layout.AddChild(PauseCaptureLabel);
+
+		PauseStatusLabel = new Label();
+		PauseStatusLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		GameUi.ApplyLabel(PauseStatusLabel, 16, new Color(0.02f, 0.34f, 0.18f));
+		layout.AddChild(PauseStatusLabel);
+
+		PauseConfirmButton = CreatePauseMenuButton("Bestätigen");
+		PauseConfirmButton.CustomMinimumSize = new Vector2(0, 42);
+		PauseConfirmButton.Pressed += () =>
+		{
+			PlayerFish.SaveControlSettings();
+			ShowPauseConfirmation("Bestätigt");
+		};
+		layout.AddChild(PauseConfirmButton);
+
+		HBoxContainer bottomRow = new HBoxContainer();
+		bottomRow.AddThemeConstantOverride("separation", 10);
+		layout.AddChild(bottomRow);
+
+		Button resumeButton = CreatePauseMenuButton("Weiter");
+		resumeButton.CustomMinimumSize = new Vector2(0, 40);
+		resumeButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		resumeButton.Pressed += () => SetGameplayPaused(false);
+		bottomRow.AddChild(resumeButton);
+
+		Button endRunButton = CreatePauseMenuButton("Runde beenden");
+		endRunButton.CustomMinimumSize = new Vector2(0, 40);
+		endRunButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		endRunButton.Pressed += EndRunFromPause;
+		bottomRow.AddChild(endRunButton);
+
+		UpdatePauseModeButtonLabels();
+		UpdatePauseCustomButtonLabels();
+		UpdatePauseSettingsStatus();
+	}
+
+	private void AddPauseModeButton(VBoxContainer parent, string text, PlayerFish.ControlScheme scheme)
+	{
+		Button button = CreatePauseMenuButton(text);
+		button.CustomMinimumSize = new Vector2(0, 36);
+		button.Pressed += () => SelectPauseControlScheme(scheme);
+		pauseModeButtons[scheme] = button;
+		parent.AddChild(button);
+	}
+
+	private void AddPauseCustomBindingButton(string label, string action)
+	{
+		Button button = CreatePauseMenuButton("");
+		button.CustomMinimumSize = new Vector2(0, 32);
+		button.Pressed += () =>
+		{
+			pendingPauseCustomAction = action;
+			PauseCaptureLabel.Text = $"{label}: Taste oder Mausklick drücken";
+		};
+
+		pauseCustomButtons[action] = button;
+		PauseCustomBindings.AddChild(button);
+	}
+
+	private Button CreatePauseMenuButton(string text)
+	{
+		Button button = new Button();
+		button.Text = text;
+		button.FocusMode = Control.FocusModeEnum.None;
+		ApplyPauseButtonStyle(button, false);
+		return button;
+	}
+
+	private void SelectPauseControlScheme(PlayerFish.ControlScheme scheme)
+	{
+		PlayerFish.SetControlScheme(scheme);
+		PauseCustomBindings.Visible = scheme == PlayerFish.ControlScheme.Custom;
+		UpdatePauseSettingsStatus();
+		UpdatePauseModeButtonLabels();
+		UpdatePauseCustomButtonLabels();
+		ShowPauseConfirmation("Gespeichert");
+	}
+
+	private void UpdatePauseModeButtonLabels()
+	{
+		foreach (var pair in pauseModeButtons)
+		{
+			bool selected = pair.Key == PlayerFish.CurrentControlScheme;
+			pair.Value.Text = $"{(selected ? "> " : "")}{GetControlSchemeName(pair.Key)}";
+			ApplyPauseButtonStyle(pair.Value, selected);
+		}
+	}
+
+	private void UpdatePauseCustomButtonLabels()
+	{
+		if (pauseCustomButtons.Count == 0)
+			return;
+
+		pauseCustomButtons[PlayerFish.CustomMoveUp].Text =
+			$"Hoch: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveUp)}";
+		pauseCustomButtons[PlayerFish.CustomMoveDown].Text =
+			$"Runter: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveDown)}";
+		pauseCustomButtons[PlayerFish.CustomMoveLeft].Text =
+			$"Links: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveLeft)}";
+		pauseCustomButtons[PlayerFish.CustomMoveRight].Text =
+			$"Rechts: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveRight)}";
+		pauseCustomButtons[PlayerFish.CustomBoost].Text =
+			$"Boost: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomBoost)}";
+	}
+
+	private string GetControlSchemeName(PlayerFish.ControlScheme scheme)
+	{
+		return scheme switch
+		{
+			PlayerFish.ControlScheme.ArrowKeys => "Pfeiltasten",
+			PlayerFish.ControlScheme.WASD => "WASD",
+			PlayerFish.ControlScheme.Mouse => "Maussteuerung",
+			PlayerFish.ControlScheme.Custom => "Eigene Tasten",
+			_ => "Steuerung",
+		};
+	}
+
+	private void ShowPauseConfirmation(string text)
+	{
+		if (PauseStatusLabel != null)
+			PauseStatusLabel.Text = $"> {text}";
+
+		if (PauseConfirmButton != null)
+			PauseConfirmButton.Text = "> Bestätigt";
+
+		pauseConfirmationTimer = 1.8f;
+	}
+
+	private void UpdatePauseConfirmation(float dt)
+	{
+		if (pauseConfirmationTimer <= 0f)
+			return;
+
+		pauseConfirmationTimer -= dt;
+
+		if (pauseConfirmationTimer <= 0f)
+			UpdatePauseSettingsStatus();
+	}
+
+	private void UpdatePauseSettingsStatus()
+	{
+		if (PauseStatusLabel != null)
+		{
+			PauseStatusLabel.Text =
+				$"Aktiv: {GetControlSchemeName(PlayerFish.CurrentControlScheme)}";
+		}
+
+		if (PauseConfirmButton != null)
+			PauseConfirmButton.Text = "Bestätigen";
+	}
+
+	private void SetGameplayPaused(bool paused)
+	{
+		if (!gameStarted || gameOverTriggered || gamePaused == paused)
+			return;
+
+		gamePaused = paused;
+
+		if (paused)
+		{
+			PauseBackdrop.Show();
+			PausePanel.Show();
+			PauseButton.Hide();
+			GetNode<ScoreManager>("/root/ScoreManager").StopScoring();
+			SetWorldPhysics(false);
+			UpdatePauseModeButtonLabels();
+			UpdatePauseCustomButtonLabels();
+			UpdatePauseSettingsStatus();
+			return;
+		}
+
+		pendingPauseCustomAction = "";
+		PauseCaptureLabel.Text = "";
+		HidePauseMenu();
+		PauseButton.Show();
+		SetWorldPhysics(true);
+		GetNode<ScoreManager>("/root/ScoreManager").StartScoring();
+	}
+
+	private void HidePauseMenu()
+	{
+		pendingPauseCustomAction = "";
+		if (PauseCaptureLabel != null)
+			PauseCaptureLabel.Text = "";
+
+		PauseBackdrop?.Hide();
+		PausePanel?.Hide();
+	}
+
+	private void SetWorldPhysics(bool active)
+	{
+		Player.SetPhysicsProcess(active);
+		SetContainerPhysics(NPCContainer, active);
+		SetContainerPhysics(PassiveFishContainer, active);
+		SetContainerPhysics(JellyfishContainer, active);
+	}
+
+	private void SetContainerPhysics(Node container, bool active)
+	{
+		if (container == null)
+			return;
+
+		foreach (Node node in container.GetChildren())
+			node.SetPhysicsProcess(active);
+	}
+
+	private void EndRunFromPause()
+	{
+		gamePaused = false;
+		HidePauseMenu();
+		PauseButton?.Hide();
+		GameOver();
+	}
+
+	private void FinishPauseInputCapture()
+	{
+		pendingPauseCustomAction = "";
+		PauseCaptureLabel.Text = "";
+		UpdatePauseCustomButtonLabels();
+		ShowPauseConfirmation("Taste gespeichert");
+	}
+
+	private StyleBoxFlat CreatePausePanelStyle(Color color)
+	{
+		return GameUi.CreatePanelStyle();
+	}
+
+	private void ApplyPauseButtonStyle(Button button, bool selected)
+	{
+		GameUi.ApplyButton(button, 15, selected);
+	}
+
+	private StyleBoxFlat CreatePauseButtonStyle(Color color)
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = color;
+		style.BorderColor = new Color(0.68f, 0.95f, 1f, 0.24f);
+		style.BorderWidthLeft = 1;
+		style.BorderWidthTop = 1;
+		style.BorderWidthRight = 1;
+		style.BorderWidthBottom = 1;
+		style.CornerRadiusTopLeft = 6;
+		style.CornerRadiusTopRight = 6;
+		style.CornerRadiusBottomLeft = 6;
+		style.CornerRadiusBottomRight = 6;
+		style.ContentMarginLeft = 12;
+		style.ContentMarginRight = 12;
+		return style;
+	}
+
+	public override void _Input(InputEvent inputEvent)
+	{
+		if (!string.IsNullOrEmpty(pendingPauseCustomAction))
+		{
+			if (inputEvent is InputEventKey captureKey &&
+				captureKey.Pressed &&
+				!captureKey.Echo)
+			{
+				if (IsEscapeKey(captureKey))
+				{
+					pendingPauseCustomAction = "";
+					PauseCaptureLabel.Text = "";
+					MarkInputHandled();
+					return;
+				}
+
+				PlayerFish.SetCustomInput(pendingPauseCustomAction, captureKey);
+				MarkInputHandled();
+				FinishPauseInputCapture();
+				return;
+			}
+
+			if (inputEvent is InputEventMouseButton captureMouse &&
+				captureMouse.Pressed)
+			{
+				PlayerFish.SetCustomInput(pendingPauseCustomAction, captureMouse);
+				MarkInputHandled();
+				FinishPauseInputCapture();
+				return;
+			}
+		}
+
+		if (inputEvent is InputEventKey keyEvent &&
+			keyEvent.Pressed &&
+			!keyEvent.Echo &&
+			IsEscapeKey(keyEvent) &&
+			gameStarted &&
+			!gameOverTriggered)
+		{
+			SetGameplayPaused(!gamePaused);
+			MarkInputHandled();
+		}
+	}
+
+	private void MarkInputHandled()
+	{
+		GetViewport().SetInputAsHandled();
+	}
+
+	private bool IsEscapeKey(InputEventKey keyEvent)
+	{
+		return keyEvent.PhysicalKeycode == Key.Escape ||
+			keyEvent.Keycode == Key.Escape;
 	}
 
 	private void CreateCountdownLabel()
@@ -379,7 +846,7 @@ public partial class Main : Node2D
 		CountdownLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		CountdownLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		CountdownLabel.VerticalAlignment = VerticalAlignment.Center;
-		CountdownLabel.AddThemeFontSizeOverride("font_size", 96);
+		GameUi.ApplyFont(CountdownLabel, 96);
 		CountdownLabel.Modulate = new Color(1f, 1f, 1f);
 		CountdownLabel.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.72f));
 		CountdownLabel.AddThemeConstantOverride("shadow_offset_x", 4);
@@ -398,7 +865,7 @@ public partial class Main : Node2D
 		LevelNoticeLabel.OffsetBottom = 126;
 		LevelNoticeLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		LevelNoticeLabel.VerticalAlignment = VerticalAlignment.Center;
-		LevelNoticeLabel.AddThemeFontSizeOverride("font_size", 30);
+		GameUi.ApplyFont(LevelNoticeLabel, 30);
 		LevelNoticeLabel.AddThemeColorOverride("font_color", new Color(0.94f, 1f, 0.98f));
 		LevelNoticeLabel.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.72f));
 		LevelNoticeLabel.AddThemeConstantOverride("shadow_offset_x", 3);
@@ -421,6 +888,9 @@ public partial class Main : Node2D
 		foreach (Node node in PassiveFishContainer.GetChildren())
 			node.SetPhysicsProcess(true);
 
+		SetContainerPhysics(JellyfishContainer, true);
+
+		PauseButton?.Show();
 		GetNode<ScoreManager>("/root/ScoreManager").StartScoring();
 	}
 
@@ -438,6 +908,7 @@ public partial class Main : Node2D
 
 		NPCFish npc = NPCFishScene.Instantiate<NPCFish>();
 
+		ConfigureNPCFish(npc);
 		npc.Position = GetDirectionalEnemySpawnPosition();
 		npc.Player = Player;
 		npc.Speed *= npcSpeedMultiplier * GetNewEnemySpeedBoost();
@@ -449,6 +920,7 @@ public partial class Main : Node2D
 	private void SpawnCrossingNPC()
 	{
 		NPCFish npc = NPCFishScene.Instantiate<NPCFish>();
+		ConfigureNPCFish(npc);
 		Vector2 forward = GetPlayerMoveDirection();
 		Vector2 side = new Vector2(-forward.Y, forward.X);
 		float sideSign = GD.Randf() < 0.5f ? -1f : 1f;
@@ -484,6 +956,29 @@ public partial class Main : Node2D
 		fish.SetPhysicsProcess(gameStarted);
 
 		PassiveFishContainer.AddChild(fish);
+	}
+
+	// =====================================
+	// JELLYFISH
+	// =====================================
+
+	void SpawnJellyfish()
+	{
+		if (JellyfishScene == null ||
+			JellyfishContainer == null ||
+			currentLevel < MinJellyfishLevel)
+		{
+			return;
+		}
+
+		Jellyfish jellyfish = JellyfishScene.Instantiate<Jellyfish>();
+
+		jellyfish.Position = GetSafeSpawnPosition();
+		jellyfish.Player = Player;
+		jellyfish.Speed *= jellyfishSpeedMultiplier;
+		jellyfish.SetPhysicsProcess(gameStarted && !gamePaused);
+
+		JellyfishContainer.AddChild(jellyfish);
 	}
 
 	// =====================================
@@ -526,10 +1021,10 @@ public partial class Main : Node2D
 		if (type == null)
 			return;
 
-		if (CountLiveItems() >= MaxItemsInWorld)
+		if (CountLiveItems() >= GetMaxItemsInWorld())
 			return;
 
-		if (GD.Randf() > ItemSpawnChance)
+		if (GD.Randf() > GetItemSpawnChance())
 			return;
 
 		Vector2? spawnPos = GetItemSpawnPosition();
@@ -566,10 +1061,18 @@ public partial class Main : Node2D
 		var pool = new List<ItemType>();
 
 		if (currentLevel >= MinChorusFruitLevel)
+		{
 			pool.Add(ItemType.ChorusFruit);
+			if (currentLevel <= 3)
+				pool.Add(ItemType.ChorusFruit);
+		}
 
 		if (currentLevel >= MinTrashLevel)
+		{
 			pool.Add(ItemType.Trash);
+			if (currentLevel >= 5)
+				pool.Add(ItemType.Trash);
+		}
 
 		if (currentLevel >= MinAlcoholLevel)
 			pool.Add(ItemType.Alcohol);
@@ -578,6 +1081,28 @@ public partial class Main : Node2D
 			return null;
 
 		return pool[(int)(GD.Randi() % pool.Count)];
+	}
+
+	private int GetMaxItemsInWorld()
+	{
+		if (currentLevel >= 5)
+			return Mathf.Max(MaxItemsInWorld, 2);
+
+		return MaxItemsInWorld;
+	}
+
+	private float GetItemSpawnChance()
+	{
+		if (currentLevel < MinChorusFruitLevel)
+			return 0f;
+
+		return currentLevel switch
+		{
+			2 => ItemSpawnChance * 0.72f,
+			3 => ItemSpawnChance,
+			4 => ItemSpawnChance * 1.22f,
+			_ => ItemSpawnChance * 1.42f,
+		};
 	}
 
 	private bool IsUsefulHintItem(ItemType type)
@@ -766,11 +1291,7 @@ public partial class Main : Node2D
 		ItemEffectLabel.OffsetTop = 50f;
 		ItemEffectLabel.OffsetRight = 420f;
 		ItemEffectLabel.OffsetBottom = 78f;
-		ItemEffectLabel.AddThemeFontSizeOverride("font_size", 17);
-		ItemEffectLabel.AddThemeColorOverride("font_color", new Color(0.88f, 1f, 0.95f));
-		ItemEffectLabel.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.65f));
-		ItemEffectLabel.AddThemeConstantOverride("shadow_offset_x", 2);
-		ItemEffectLabel.AddThemeConstantOverride("shadow_offset_y", 2);
+		GameUi.ApplyLabel(ItemEffectLabel, 17, new Color(0.88f, 1f, 0.95f));
 		ItemEffectLabel.Hide();
 
 		GetNode<CanvasLayer>("UI").AddChild(ItemEffectLabel);
@@ -793,11 +1314,7 @@ public partial class Main : Node2D
 		ItemHintText.CustomMinimumSize = new Vector2(76f, 22f);
 		ItemHintText.HorizontalAlignment = HorizontalAlignment.Center;
 		ItemHintText.MouseFilter = Control.MouseFilterEnum.Ignore;
-		ItemHintText.AddThemeFontSizeOverride("font_size", 15);
-		ItemHintText.AddThemeColorOverride("font_color", new Color(0.95f, 1f, 0.86f, 0.9f));
-		ItemHintText.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.72f));
-		ItemHintText.AddThemeConstantOverride("shadow_offset_x", 2);
-		ItemHintText.AddThemeConstantOverride("shadow_offset_y", 2);
+		GameUi.ApplyLabel(ItemHintText, 15, new Color(0.95f, 1f, 0.86f, 0.9f));
 		ItemHintText.Hide();
 
 		CanvasLayer ui = GetNode<CanvasLayer>("UI");
@@ -1020,35 +1537,38 @@ public partial class Main : Node2D
 
 	private float GetNewEnemySpeedBoost()
 	{
-		if (currentLevel >= 3)
-			return 1.16f;
-
-		if (currentLevel >= 2)
-			return 1.07f;
-
-		return 1f;
+		return currentLevel switch
+		{
+			>= 5 => 1.2f,
+			4 => 1.14f,
+			3 => 1.09f,
+			2 => 1.04f,
+			_ => 1f,
+		};
 	}
 
 	private float GetCrossingFishChance()
 	{
-		if (currentLevel == 2)
-			return CrossingFishChance * 0.45f;
-
-		if (currentLevel == 3)
-			return CrossingFishChance * 0.68f;
-
-		return CrossingFishChance;
+		return currentLevel switch
+		{
+			2 => CrossingFishChance * 0.36f,
+			3 => CrossingFishChance * 0.58f,
+			4 => CrossingFishChance * 0.86f,
+			>= 5 => CrossingFishChance * 1.12f,
+			_ => 0f,
+		};
 	}
 
 	private float GetCrossingEnemySpeedBoost()
 	{
-		if (currentLevel == 2)
-			return 1.38f;
-
-		if (currentLevel == 3)
-			return 1.65f;
-
-		return 1.65f + (currentLevel - 3) * 0.08f;
+		return currentLevel switch
+		{
+			2 => 1.24f,
+			3 => 1.38f,
+			4 => 1.55f,
+			>= 5 => 1.7f,
+			_ => 1f,
+		};
 	}
 
 	private float GetSpawnAngle(bool preferChaseAngle, int attempt)
@@ -1097,6 +1617,7 @@ public partial class Main : Node2D
 
 		AddNode2DChildren(nodes, NPCContainer);
 		AddNode2DChildren(nodes, PassiveFishContainer);
+		AddNode2DChildren(nodes, JellyfishContainer);
 		AddNode2DChildren(nodes, CoinContainer);
 		AddNode2DChildren(nodes, ObstacleContainer);
 		if (ItemContainer != null)
@@ -1107,6 +1628,9 @@ public partial class Main : Node2D
 
 	private void AddNode2DChildren(List<Node2D> nodes, Node container)
 	{
+		if (container == null)
+			return;
+
 		foreach (Node child in container.GetChildren())
 		{
 			if (child is Node2D node && !node.IsQueuedForDeletion())
@@ -1125,6 +1649,7 @@ public partial class Main : Node2D
 
 		DespawnFarChildren(NPCContainer);
 		DespawnFarChildren(PassiveFishContainer);
+		DespawnFarChildren(JellyfishContainer);
 		DespawnFarChildren(CoinContainer);
 		DespawnFarChildren(ObstacleContainer);
 		DespawnFarChildren(ItemContainer);
@@ -1136,6 +1661,7 @@ public partial class Main : Node2D
 
 		FillContainer(NPCContainer, TargetNPCCount, SpawnNPC);
 		FillContainer(PassiveFishContainer, TargetPassiveFishCount, SpawnPassiveFish);
+		FillContainer(JellyfishContainer, TargetJellyfishCount, SpawnJellyfish);
 		FillContainer(CoinContainer, TargetCoinCount, SpawnCoin);
 		FillContainer(ObstacleContainer, TargetObstacleCount, SpawnObstacle);
 		TrySpawnRareItem();
@@ -1158,6 +1684,9 @@ public partial class Main : Node2D
 
 	private void FillContainer(Node container, int targetCount, System.Action spawnAction)
 	{
+		if (container == null)
+			return;
+
 		int liveCount = 0;
 
 		foreach (Node child in container.GetChildren())
@@ -1179,14 +1708,19 @@ public partial class Main : Node2D
 
 	private void UpdateDifficulty(int score)
 	{
-		if (currentLevel < 2 && score >= 2000)
-			SetDifficultyLevel(2);
+		int targetLevel = 1;
 
-		if (currentLevel < 3 && score >= 4500)
-			SetDifficultyLevel(3);
+		if (score >= LevelFiveScore)
+			targetLevel = 5;
+		else if (score >= LevelFourScore)
+			targetLevel = 4;
+		else if (score >= LevelThreeScore)
+			targetLevel = 3;
+		else if (score >= LevelTwoScore)
+			targetLevel = 2;
 
-		if (currentLevel >= 3)
-			ApplyLevelThreeRamp(GetLevelThreeRampStep(score));
+		if (targetLevel > currentLevel)
+			SetDifficultyLevel(targetLevel);
 	}
 
 	private void SetDifficultyLevel(int level)
@@ -1197,60 +1731,66 @@ public partial class Main : Node2D
 
 	private void ApplyLevelSettings(int level, bool showNotice)
 	{
-		if (level >= 2)
+		switch (level)
 		{
-			TargetNPCCount = 8;
-			TargetPassiveFishCount = 15;
-			TargetObstacleCount = 11;
-			MinSpawnSpacing = 190f;
-			SpawnCheckInterval = 0.29f;
-			ApplySpeedMultiplier(1.12f, 1.05f);
+			case 1:
+				TargetNPCCount = 7;
+				TargetPassiveFishCount = 14;
+				TargetJellyfishCount = 0;
+				TargetObstacleCount = 10;
+				MinSpawnSpacing = 170f;
+				SpawnCheckInterval = 0.35f;
+				ApplySpeedMultiplier(1f, 1f, 1f);
+				break;
 
-			if (showNotice)
-			{
-				ShowLevelNotice("LvL 2 erreicht");
-			}
+			case 2:
+				TargetNPCCount = 8;
+				TargetPassiveFishCount = 15;
+				TargetJellyfishCount = 2;
+				TargetObstacleCount = 11;
+				MinSpawnSpacing = 185f;
+				SpawnCheckInterval = 0.31f;
+				ApplySpeedMultiplier(1.08f, 1.03f, 1.04f);
+				break;
+
+			case 3:
+				TargetNPCCount = 9;
+				TargetPassiveFishCount = 16;
+				TargetJellyfishCount = 3;
+				TargetObstacleCount = 12;
+				MinSpawnSpacing = 205f;
+				SpawnCheckInterval = 0.27f;
+				ApplySpeedMultiplier(1.18f, 1.08f, 1.1f);
+				break;
+
+			case 4:
+				TargetNPCCount = 11;
+				TargetPassiveFishCount = 18;
+				TargetJellyfishCount = 5;
+				TargetObstacleCount = 13;
+				MinSpawnSpacing = 220f;
+				SpawnCheckInterval = 0.24f;
+				ApplySpeedMultiplier(1.29f, 1.13f, 1.18f);
+				break;
+
+			default:
+				TargetNPCCount = 13;
+				TargetPassiveFishCount = 19;
+				TargetJellyfishCount = 7;
+				TargetObstacleCount = 14;
+				MinSpawnSpacing = 210f;
+				SpawnCheckInterval = 0.21f;
+				ApplySpeedMultiplier(1.4f, 1.18f, 1.28f);
+				break;
 		}
+
+		if (!showNotice)
+			return;
+
+		ShowLevelNotice($"Level {level} erreicht");
 
 		if (level >= 3)
-		{
-			ApplyLevelThreeRamp(0);
-
-			if (showNotice)
-			{
-				ScheduleLevelSwarm(3);
-				ShowLevelNotice("LvL 3 erreicht");
-			}
-		}
-	}
-
-	private int GetLevelThreeRampStep(int score)
-	{
-		int stepSize = LevelThreeRampScoreStep < 1 ? 1 : LevelThreeRampScoreStep;
-		int rampStep = (score - 4500) / stepSize;
-
-		if (rampStep < 0)
-			return 0;
-
-		if (rampStep > 3)
-			return 3;
-
-		return rampStep;
-	}
-
-	private void ApplyLevelThreeRamp(int rampStep)
-	{
-		float ramp = rampStep / 3f;
-
-		TargetNPCCount = 10 + rampStep;
-		TargetPassiveFishCount = 17 + rampStep;
-		TargetObstacleCount = 12 + (rampStep < 2 ? rampStep : 2);
-		MinSpawnSpacing = Mathf.Lerp(230f, 210f, ramp);
-		SpawnCheckInterval = Mathf.Lerp(0.25f, 0.22f, ramp);
-		ApplySpeedMultiplier(
-			Mathf.Lerp(1.24f, 1.36f, ramp),
-			Mathf.Lerp(1.12f, 1.18f, ramp)
-		);
+			ScheduleLevelSwarm(level - 1);
 	}
 
 	private void ScheduleLevelSwarm(int count)
@@ -1286,6 +1826,7 @@ public partial class Main : Node2D
 		for (int i = 0; i < count; i++)
 		{
 			NPCFish npc = NPCFishScene.Instantiate<NPCFish>();
+			ConfigureNPCFish(npc);
 			float row = i - (count - 1) * 0.5f;
 			Vector2 offset =
 				side * row * SwarmSpacing +
@@ -1302,13 +1843,36 @@ public partial class Main : Node2D
 		}
 	}
 
-	private void ApplySpeedMultiplier(float newNpcMultiplier, float newPassiveMultiplier)
+	private void ConfigureNPCFish(NPCFish npc)
+	{
+		float variantTwoChance = currentLevel switch
+		{
+			>= 5 => 0.58f,
+			4 => 0.46f,
+			3 => 0.3f,
+			_ => 0f,
+		};
+
+		NPCFish.EnemySkin skin = GD.Randf() < variantTwoChance
+			? NPCFish.EnemySkin.Gegnerfisch2
+			: NPCFish.EnemySkin.Gegnerfisch;
+
+		npc.ConfigureSkin(skin);
+	}
+
+	private void ApplySpeedMultiplier(
+		float newNpcMultiplier,
+		float newPassiveMultiplier,
+		float newJellyfishMultiplier
+	)
 	{
 		float npcRatio = newNpcMultiplier / npcSpeedMultiplier;
 		float passiveRatio = newPassiveMultiplier / passiveSpeedMultiplier;
+		float jellyfishRatio = newJellyfishMultiplier / jellyfishSpeedMultiplier;
 
 		npcSpeedMultiplier = newNpcMultiplier;
 		passiveSpeedMultiplier = newPassiveMultiplier;
+		jellyfishSpeedMultiplier = newJellyfishMultiplier;
 
 		foreach (Node node in NPCContainer.GetChildren())
 		{
@@ -1320,6 +1884,15 @@ public partial class Main : Node2D
 		{
 			if (node is PassiveFish fish)
 				fish.Speed *= passiveRatio;
+		}
+
+		if (JellyfishContainer == null)
+			return;
+
+		foreach (Node node in JellyfishContainer.GetChildren())
+		{
+			if (node is Jellyfish jellyfish)
+				jellyfish.Speed *= jellyfishRatio;
 		}
 	}
 
@@ -1374,7 +1947,10 @@ public partial class Main : Node2D
 
 	public override void _PhysicsProcess(double delta)
 	{
-		if (!gameStarted)
+		if (MenuPreviewMode)
+			return;
+
+		if (!gameStarted || gamePaused)
 			return;
 
 		float dt = (float)delta;
@@ -1437,6 +2013,34 @@ public partial class Main : Node2D
 			}
 		}
 
+		if (JellyfishContainer != null)
+		{
+			foreach (Node node in JellyfishContainer.GetChildren())
+			{
+				if (node is Jellyfish jellyfish)
+				{
+					float dist = Player.Position.DistanceTo(jellyfish.Position);
+
+					float realDist =
+						dist - (Player.CollisionRadius + jellyfish.CollisionRadius);
+
+					if (realDist <= 0f)
+					{
+						GameOver();
+						return;
+					}
+
+					threatPressure +=
+						CalculateProximityPressure(realDist, JellyfishDangerRadius) *
+						JellyfishStressWeight;
+
+					contactPressure +=
+						CalculateContactPressure(realDist, JellyfishContactRadius) *
+						JellyfishStressWeight;
+				}
+			}
+		}
+
 		float stressMultiplier = Player.IsBoosting ? 0.5f : 1f;
 		float targetStress = Mathf.Clamp(
 			(threatPressure * StressTargetPerThreat * stressMultiplier) +
@@ -1486,6 +2090,7 @@ public partial class Main : Node2D
 
 		gameOverTriggered = true;
 		gameStarted = false;
+		gamePaused = false;
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 		sm.StopScoring();
@@ -1499,8 +2104,12 @@ public partial class Main : Node2D
 		foreach (Node node in PassiveFishContainer.GetChildren())
 			node.SetPhysicsProcess(false);
 
+		SetContainerPhysics(JellyfishContainer, false);
+
 		invincibilityTimer = 0f;
 		HideItemDirectionHint();
+		HidePauseMenu();
+		PauseButton?.Hide();
 
 		SceneTransition.FadeToScene(
 			GetTree(),

@@ -8,11 +8,18 @@ public partial class NPCFish : CharacterBody2D
 		Crossing
 	}
 
+	public enum EnemySkin
+	{
+		Gegnerfisch,
+		Gegnerfisch2
+	}
+
 	[Export] public float Speed = 120f;
 	[Export] public float RotationSpeed = 3f;
 
 	[Export] public float SwimAmplitude = 0.15f;
 	[Export] public float SwimFrequency = 4f;
+	[Export] public float SwimFrameRate = 8f;
 	[Export] public float ShakeAmplitude = 0.08f;
 	[Export] public float BoostShakeAmplitude = 0.17f;
 	[Export] public float ShakeFrequency = 17f;
@@ -31,6 +38,7 @@ public partial class NPCFish : CharacterBody2D
 	// Offset movement
 	[Export] public float ApproachOffsetStrength = 100f;
 	[Export] public float CollisionRadius = 40f;
+	[Export] public EnemySkin Skin = EnemySkin.Gegnerfisch;
 
 	public Node2D Player; // assigned from Main
 	public MovementMode Mode = MovementMode.Chase;
@@ -40,6 +48,8 @@ public partial class NPCFish : CharacterBody2D
 	private Sprite2D fishSprite;
 	private float swimTime = 0f;
 	private int facingDirection = -1;
+	private Texture2D[] swimFrames;
+	private bool skinStatsApplied = false;
 
 	private float boostTimer = 0f;
 	private float boostCooldownTimer = 0f;
@@ -48,9 +58,58 @@ public partial class NPCFish : CharacterBody2D
 	public override void _Ready()
 	{
 		fishSprite = GetNode<Sprite2D>("Sprite2D");
+		LoadSkinFrames();
+		UpdateSwimFrame();
 		rng.Randomize();
 
 		AddToGroup("fish");
+	}
+
+	public void ConfigureSkin(EnemySkin skin)
+	{
+		Skin = skin;
+		ApplySkinStats();
+		LoadSkinFrames();
+		UpdateSwimFrame();
+	}
+
+	private void ApplySkinStats()
+	{
+		if (skinStatsApplied)
+			return;
+
+		skinStatsApplied = true;
+
+		if (Skin == EnemySkin.Gegnerfisch2)
+		{
+			Speed *= 1.08f;
+			BoostChance *= 0.72f;
+			BoostMultiplier *= 0.92f;
+			ApproachOffsetStrength *= 1.35f;
+			SeparationRadius *= 0.92f;
+			SwimFrameRate *= 0.85f;
+			return;
+		}
+
+		BoostChance *= 1.05f;
+		BoostMultiplier *= 1.04f;
+		PositionShakePixels *= 1.08f;
+	}
+
+	private void LoadSkinFrames()
+	{
+		swimFrames = Skin == EnemySkin.Gegnerfisch2
+			? new Texture2D[]
+			{
+				ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfisch2frame1.png"),
+				ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfisch2frame2.png")
+			}
+			: new Texture2D[]
+			{
+				ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfischframe1.png"),
+				ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfischframe2.png"),
+				ResourceLoader.Load<Texture2D>("res://Assets/Gegnerfischframe3.png")
+			};
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -183,6 +242,7 @@ public partial class NPCFish : CharacterBody2D
 			swimTime += dt;
 
 			UpdateFacingDirection();
+			UpdateSwimFrame();
 
 			float moveAngle = Velocity.Angle();
 			float targetRotation =
@@ -221,5 +281,17 @@ public partial class NPCFish : CharacterBody2D
 			facingDirection = 1;
 		else if (Velocity.X < -8f)
 			facingDirection = -1;
+	}
+
+	private void UpdateSwimFrame()
+	{
+		if (fishSprite == null || swimFrames == null || swimFrames.Length == 0)
+			return;
+
+		int frameIndex = Mathf.PosMod((int)(swimTime * SwimFrameRate), swimFrames.Length);
+		Texture2D texture = swimFrames[frameIndex];
+
+		if (texture != null && fishSprite.Texture != texture)
+			fishSprite.Texture = texture;
 	}
 }
