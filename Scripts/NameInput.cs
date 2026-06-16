@@ -30,12 +30,19 @@ public partial class NameInput : Control
 
 	public override void _Ready()
 	{
-		SetAnchorsPreset(LayoutPreset.FullRect);
+		SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 		ClearSceneChildren();
 		BuildLayout();
+		UpdateResultPanelPlacement();
 		CallDeferred(nameof(RumbleGameOver));
 		GameUi.FocusFirstButton(this);
 		SceneTransition.FadeIn(GetTree(), 0.26f);
+	}
+
+	public override void _Notification(int what)
+	{
+		if (what == NotificationResized)
+			UpdateResultPanelPlacement();
 	}
 
 	private void RumbleGameOver()
@@ -105,33 +112,13 @@ public partial class NameInput : Control
 		AddTintOverlay();
 		AddDeathEffectOverlay();
 
-		MarginContainer pageMargin = new MarginContainer();
-		pageMargin.SetAnchorsPreset(LayoutPreset.FullRect);
-		pageMargin.AddThemeConstantOverride("margin_left", 28);
-		pageMargin.AddThemeConstantOverride("margin_top", 24);
-		pageMargin.AddThemeConstantOverride("margin_right", 28);
-		pageMargin.AddThemeConstantOverride("margin_bottom", 24);
-		AddChild(pageMargin);
-
-		Control page = new Control();
-		page.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-		page.SizeFlagsVertical = SizeFlags.ExpandFill;
-		pageMargin.AddChild(page);
-
 		resultPanelHost = new Control();
 		resultPanelHost.CustomMinimumSize = new Vector2(620, 410);
-		resultPanelHost.AnchorLeft = 0.5f;
-		resultPanelHost.AnchorTop = 0.5f;
-		resultPanelHost.AnchorRight = 0.5f;
-		resultPanelHost.AnchorBottom = 0.5f;
-		resultPanelHost.OffsetLeft = -310f;
-		resultPanelHost.OffsetTop = -205f;
-		resultPanelHost.OffsetRight = 310f;
-		resultPanelHost.OffsetBottom = 205f;
-		page.AddChild(resultPanelHost);
+		resultPanelHost.SetAnchorsAndOffsetsPreset(LayoutPreset.TopLeft);
+		AddChild(resultPanelHost);
 
 		resultPanel = new PanelContainer();
-		resultPanel.SetAnchorsPreset(LayoutPreset.FullRect);
+		resultPanel.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 		resultPanel.AddThemeStyleboxOverride("panel", CreatePanelStyle());
 		resultPanelHost.AddChild(resultPanel);
 
@@ -357,14 +344,16 @@ public partial class NameInput : Control
 		if (resultPanelHost == null || resultPanel == null)
 			return;
 
+		UpdateResultPanelPlacement();
+
 		float panic = Mathf.Max(0f, 1f - effectTimer / 1.15f);
 		float shake = Mathf.Sin(effectTimer * 34f) * 2.5f * panic;
 		float appear = Mathf.Clamp(effectTimer / 0.42f, 0f, 1f);
 
 		resultPanelHost.Scale = Vector2.One;
-		resultPanelHost.PivotOffset = resultPanelHost.CustomMinimumSize * 0.5f;
+		resultPanelHost.PivotOffset = resultPanelHost.Size * 0.5f;
 
-		Vector2 panelPivot = resultPanelHost.CustomMinimumSize * 0.5f;
+		Vector2 panelPivot = resultPanelHost.Size * 0.5f;
 		resultPanel.Position = new Vector2(shake, Mathf.Sin(effectTimer * 1.1f) * panic * 0.6f);
 		resultPanel.PivotOffset = panelPivot;
 		resultPanel.Scale = new Vector2(
@@ -372,6 +361,29 @@ public partial class NameInput : Control
 			0.97f + appear * 0.03f
 		);
 		resultPanel.Modulate = new Color(1f, 1f, 1f, appear);
+	}
+
+	private void UpdateResultPanelPlacement()
+	{
+		if (resultPanelHost == null)
+			return;
+
+		Vector2 viewport = GetViewportRect().Size;
+		if (viewport.X <= 1f || viewport.Y <= 1f)
+			viewport = new Vector2(1280f, 720f);
+
+		Vector2 desiredSize = new Vector2(620f, 410f);
+		Vector2 contentSize = resultPanel != null
+			? resultPanel.GetCombinedMinimumSize()
+			: Vector2.Zero;
+		Vector2 panelSize = new Vector2(
+			Mathf.Clamp(Mathf.Max(desiredSize.X, contentSize.X), 320f, Mathf.Max(320f, viewport.X - 56f)),
+			Mathf.Clamp(Mathf.Max(desiredSize.Y, contentSize.Y), 320f, Mathf.Max(320f, viewport.Y - 48f))
+		);
+
+		resultPanelHost.Size = panelSize;
+		resultPanelHost.CustomMinimumSize = panelSize;
+		resultPanelHost.Position = (viewport - panelSize) * 0.5f;
 	}
 
 	private void AddTintOverlay()
