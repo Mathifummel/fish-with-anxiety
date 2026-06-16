@@ -3,6 +3,20 @@ using System.Collections.Generic;
 
 public static class GameUi
 {
+	public enum ControllerFamily
+	{
+		Generic,
+		PlayStation,
+		Xbox
+	}
+
+	public enum ControllerHintMode
+	{
+		Menu,
+		GameOver,
+		BackOnly
+	}
+
 	private static Font pixelFont;
 	private static bool inputDefaultsReady = false;
 	private static bool controllerNoticeShownThisRun = false;
@@ -318,6 +332,203 @@ public static class GameUi
 		return style;
 	}
 
+	public static ControllerHintBar CreateControllerHintBar(ControllerHintMode mode = ControllerHintMode.Menu)
+	{
+		ControllerHintBar bar = new ControllerHintBar();
+		bar.Mode = mode;
+		bar.MouseFilter = Control.MouseFilterEnum.Ignore;
+		bar.CustomMinimumSize = new Vector2(0f, 42f);
+		bar.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		bar.AddThemeStyleboxOverride("panel", CreateControllerHintStyle());
+
+		HBoxContainer items = new HBoxContainer();
+		items.Alignment = BoxContainer.AlignmentMode.Center;
+		items.AddThemeConstantOverride("separation", 8);
+		bar.Items = items;
+		bar.AddChild(items);
+
+		UpdateControllerHintBar(bar);
+		return bar;
+	}
+
+	public static void PlaceControllerHintOverlay(Control hintBar, float bottomMargin = 22f)
+	{
+		if (hintBar == null)
+			return;
+
+		if (hintBar is ControllerHintBar controllerHintBar)
+		{
+			controllerHintBar.UseOverlayPlacement = true;
+			controllerHintBar.OverlayBottomMargin = bottomMargin;
+		}
+
+		RefreshControllerHintOverlay(hintBar, bottomMargin);
+	}
+
+	public static void RefreshControllerHintOverlay(Control hintBar, float bottomMargin)
+	{
+		if (hintBar == null)
+			return;
+
+		Vector2 contentSize = hintBar.GetCombinedMinimumSize();
+		Vector2 viewportSize = hintBar.GetViewportRect().Size;
+		if (viewportSize.X <= 1f)
+			viewportSize = new Vector2(1280f, 720f);
+
+		float width = Mathf.Ceil(Mathf.Clamp(contentSize.X, 140f, Mathf.Max(140f, viewportSize.X - 32f)));
+		float height = Mathf.Ceil(Mathf.Clamp(contentSize.Y, 34f, 58f));
+
+		hintBar.SetAnchorsPreset(Control.LayoutPreset.CenterBottom);
+		hintBar.OffsetLeft = -width * 0.5f;
+		hintBar.OffsetRight = width * 0.5f;
+		hintBar.OffsetTop = -bottomMargin - height;
+		hintBar.OffsetBottom = -bottomMargin;
+	}
+
+	public static void UpdateControllerHintBar(ControllerHintBar bar)
+	{
+		if (bar == null || bar.Items == null)
+			return;
+
+		bool hasController = Input.GetConnectedJoypads().Count > 0;
+		bar.Visible = hasController;
+
+		if (!hasController)
+		{
+			bar.CurrentKey = "";
+			return;
+		}
+
+		ControllerFamily family = GetActiveControllerFamily();
+		string key = $"{bar.Mode}:{family}";
+
+		if (bar.CurrentKey == key)
+			return;
+
+		bar.CurrentKey = key;
+		ClearHintItems(bar.Items);
+
+		foreach (ControllerHintItem item in GetControllerHintItems(bar.Mode, family))
+			bar.Items.AddChild(CreateControllerHintChip(item.IconPath, item.Text));
+	}
+
+	private static void ClearHintItems(HBoxContainer items)
+	{
+		foreach (Node child in items.GetChildren())
+		{
+			items.RemoveChild(child);
+			child.QueueFree();
+		}
+	}
+
+	private static Control CreateControllerHintChip(string iconPath, string text)
+	{
+		PanelContainer chip = new PanelContainer();
+		chip.MouseFilter = Control.MouseFilterEnum.Ignore;
+		chip.AddThemeStyleboxOverride("panel", CreateControllerHintChipStyle());
+
+		HBoxContainer row = new HBoxContainer();
+		row.Alignment = BoxContainer.AlignmentMode.Center;
+		row.AddThemeConstantOverride("separation", 5);
+		chip.AddChild(row);
+
+		TextureRect icon = new TextureRect();
+		icon.Texture = ResourceLoader.Load<Texture2D>(iconPath);
+		icon.CustomMinimumSize = new Vector2(30f, 30f);
+		icon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		icon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		row.AddChild(icon);
+
+		Label label = new Label();
+		label.Text = text;
+		label.ClipText = false;
+		label.CustomMinimumSize = new Vector2(Mathf.Max(62f, text.Length * 8f), 0f);
+		label.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
+		ApplyLabel(label, 13, LightText);
+		row.AddChild(label);
+
+		return chip;
+	}
+
+	private static StyleBoxFlat CreateControllerHintStyle()
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = new Color(0.02f, 0.12f, 0.17f, 0.82f);
+		style.BorderColor = new Color(0.7f, 0.96f, 1f, 0.58f);
+		style.BorderWidthLeft = 1;
+		style.BorderWidthTop = 1;
+		style.BorderWidthRight = 1;
+		style.BorderWidthBottom = 1;
+		style.CornerRadiusTopLeft = 4;
+		style.CornerRadiusTopRight = 4;
+		style.CornerRadiusBottomLeft = 4;
+		style.CornerRadiusBottomRight = 4;
+		style.ContentMarginLeft = 10;
+		style.ContentMarginTop = 6;
+		style.ContentMarginRight = 10;
+		style.ContentMarginBottom = 6;
+		return style;
+	}
+
+	private static StyleBoxFlat CreateControllerHintChipStyle()
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = new Color(1f, 1f, 1f, 0f);
+		style.BorderColor = new Color(1f, 1f, 1f, 0f);
+		style.BorderWidthLeft = 0;
+		style.BorderWidthTop = 0;
+		style.BorderWidthRight = 0;
+		style.BorderWidthBottom = 0;
+		style.ContentMarginLeft = 2;
+		style.ContentMarginTop = 1;
+		style.ContentMarginRight = 6;
+		style.ContentMarginBottom = 1;
+		return style;
+	}
+
+	private static ControllerHintItem[] GetControllerHintItems(ControllerHintMode mode, ControllerFamily family)
+	{
+		string dpad = family == ControllerFamily.PlayStation
+			? "res://Assets/ControllerHints/ps_dpad.png"
+			: "res://Assets/ControllerHints/xbox_dpad.png";
+		string accept = family == ControllerFamily.PlayStation
+			? "res://Assets/ControllerHints/ps_cross.png"
+			: "res://Assets/ControllerHints/xbox_a.png";
+		string retry = family == ControllerFamily.PlayStation
+			? "res://Assets/ControllerHints/ps_square.png"
+			: "res://Assets/ControllerHints/xbox_x.png";
+		string cancel = family == ControllerFamily.PlayStation
+			? "res://Assets/ControllerHints/ps_circle.png"
+			: "res://Assets/ControllerHints/xbox_b.png";
+
+		if (mode == ControllerHintMode.GameOver)
+		{
+			return new ControllerHintItem[]
+			{
+				new ControllerHintItem(dpad, "Navigieren"),
+				new ControllerHintItem(accept, "Bestätigen"),
+				new ControllerHintItem(retry, "Nochmal"),
+				new ControllerHintItem(cancel, "Hauptmenü")
+			};
+		}
+
+		if (mode == ControllerHintMode.BackOnly)
+		{
+			return new ControllerHintItem[]
+			{
+				new ControllerHintItem(dpad, "Navigieren"),
+				new ControllerHintItem(accept, "Bestätigen"),
+				new ControllerHintItem(cancel, "Zurück")
+			};
+		}
+
+		return new ControllerHintItem[]
+		{
+			new ControllerHintItem(dpad, "Navigieren"),
+			new ControllerHintItem(accept, "Bestätigen")
+		};
+	}
+
 	public static bool TryClaimControllerNotice()
 	{
 		if (controllerNoticeShownThisRun)
@@ -334,11 +545,10 @@ public static class GameUi
 
 	public static ControllerInfo GetControllerInfo(string joyName)
 	{
-		string normalized = (joyName ?? "").ToLowerInvariant();
+		ControllerFamily family = GetControllerFamily(joyName);
 
-		if (normalized.Contains("dualshock") ||
-			normalized.Contains("dual shock") ||
-			normalized.Contains("ps4"))
+		if (family == ControllerFamily.PlayStation &&
+			IsPs4Controller(joyName))
 		{
 			return new ControllerInfo(
 				"PS4 Controller",
@@ -346,10 +556,7 @@ public static class GameUi
 			);
 		}
 
-		if (normalized.Contains("dualsense") ||
-			normalized.Contains("dual sense") ||
-			normalized.Contains("ps5") ||
-			normalized.Contains("playstation"))
+		if (family == ControllerFamily.PlayStation)
 		{
 			return new ControllerInfo(
 				"PS5 Controller",
@@ -357,9 +564,7 @@ public static class GameUi
 			);
 		}
 
-		if (normalized.Contains("xbox") ||
-			normalized.Contains("xinput") ||
-			normalized.Contains("microsoft"))
+		if (family == ControllerFamily.Xbox)
 		{
 			return new ControllerInfo(
 				"Xbox Controller",
@@ -373,6 +578,66 @@ public static class GameUi
 		);
 	}
 
+	public static ControllerFamily GetActiveControllerFamily()
+	{
+		ControllerFamily fallback = ControllerFamily.Generic;
+
+		foreach (int device in Input.GetConnectedJoypads())
+		{
+			ControllerFamily family = GetControllerFamily(Input.GetJoyName(device));
+
+			if (family != ControllerFamily.Generic)
+				return family;
+		}
+
+		return fallback;
+	}
+
+	public static ControllerFamily GetControllerFamily(string joyName)
+	{
+		string normalized = (joyName ?? "").ToLowerInvariant();
+
+		if (normalized.Contains("dualshock") ||
+			normalized.Contains("dual shock") ||
+			normalized.Contains("dualsense") ||
+			normalized.Contains("dual sense") ||
+			normalized.Contains("ps4") ||
+			normalized.Contains("ps5") ||
+			normalized.Contains("playstation"))
+		{
+			return ControllerFamily.PlayStation;
+		}
+
+		if (normalized.Contains("xbox") ||
+			normalized.Contains("xinput") ||
+			normalized.Contains("microsoft"))
+		{
+			return ControllerFamily.Xbox;
+		}
+
+		return ControllerFamily.Generic;
+	}
+
+	private static bool IsPs4Controller(string joyName)
+	{
+		string normalized = (joyName ?? "").ToLowerInvariant();
+		return normalized.Contains("dualshock") ||
+			normalized.Contains("dual shock") ||
+			normalized.Contains("ps4");
+	}
+
+	private readonly struct ControllerHintItem
+	{
+		public readonly string IconPath;
+		public readonly string Text;
+
+		public ControllerHintItem(string iconPath, string text)
+		{
+			IconPath = iconPath;
+			Text = text;
+		}
+	}
+
 	public readonly struct ControllerInfo
 	{
 		public readonly string DisplayName;
@@ -383,5 +648,22 @@ public static class GameUi
 			DisplayName = displayName;
 			TexturePath = texturePath;
 		}
+	}
+}
+
+public partial class ControllerHintBar : PanelContainer
+{
+	public GameUi.ControllerHintMode Mode = GameUi.ControllerHintMode.Menu;
+	public HBoxContainer Items;
+	public string CurrentKey = "";
+	public bool UseOverlayPlacement = false;
+	public float OverlayBottomMargin = 22f;
+
+	public override void _Process(double delta)
+	{
+		GameUi.UpdateControllerHintBar(this);
+
+		if (UseOverlayPlacement)
+			GameUi.RefreshControllerHintOverlay(this, OverlayBottomMargin);
 	}
 }

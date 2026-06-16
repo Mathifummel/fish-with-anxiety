@@ -580,6 +580,10 @@ public partial class Main : Node2D
 		endRunButton.Pressed += EndRunFromPause;
 		bottomRow.AddChild(endRunButton);
 
+		ControllerHintBar controllerHints = GameUi.CreateControllerHintBar(GameUi.ControllerHintMode.BackOnly);
+		controllerHints.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		layout.AddChild(controllerHints);
+
 		UpdatePauseModeButtonLabels();
 		UpdatePauseCustomButtonLabels();
 		UpdatePauseSettingsStatus();

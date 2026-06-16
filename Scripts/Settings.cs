@@ -146,6 +146,10 @@ public partial class Settings : Control
 		Button backButton = CreateMenuButton("Zurueck");
 		backButton.Pressed += GoBack;
 		actions.AddChild(backButton);
+
+		ControllerHintBar controllerHints = GameUi.CreateControllerHintBar(GameUi.ControllerHintMode.BackOnly);
+		controllerHints.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		layout.AddChild(controllerHints);
 	}
 
 	private Label CreateLabel(string text, int size, Color color)

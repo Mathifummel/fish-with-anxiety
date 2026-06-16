@@ -33,6 +33,7 @@ public partial class SimpleMenuPage : Control
 		}
 
 		AddBackButton();
+		AddControllerHints();
 		GameUi.FocusFirstButton(this);
 		SceneTransition.FadeIn(GetTree(), 0.24f);
 	}
@@ -59,5 +60,12 @@ public partial class SimpleMenuPage : Control
 		GameUi.ApplyButton(button);
 		button.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
 		AddChild(button);
+	}
+
+	private void AddControllerHints()
+	{
+		ControllerHintBar controllerHints = GameUi.CreateControllerHintBar(GameUi.ControllerHintMode.BackOnly);
+		GameUi.PlaceControllerHintOverlay(controllerHints, 18f);
+		AddChild(controllerHints);
 	}
 }

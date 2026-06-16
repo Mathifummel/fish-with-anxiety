@@ -713,6 +713,10 @@ public partial class TutorialMode : Node2D
 		menuButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.32f);
 		buttons.AddChild(menuButton);
 
+		ControllerHintBar controllerHints = GameUi.CreateControllerHintBar();
+		GameUi.PlaceControllerHintOverlay(controllerHints, 10f);
+		ui.AddChild(controllerHints);
+
 		GameUi.FocusFirstButton(buttons);
 	}
 

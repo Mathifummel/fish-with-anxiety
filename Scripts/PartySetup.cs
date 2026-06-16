@@ -128,6 +128,7 @@ public partial class PartySetup : Control
 		Button backButton = CreateButton("Zurück");
 		backButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
 		content.AddChild(backButton);
+		AddControllerHints();
 		GameUi.FocusFirstButton(this);
 	}
 
@@ -175,6 +176,7 @@ public partial class PartySetup : Control
 		Button backButton = CreateButton("Zurück");
 		backButton.Pressed += ShowModeStep;
 		content.AddChild(backButton);
+		AddControllerHints();
 		GameUi.FocusFirstButton(this);
 	}
 
@@ -229,6 +231,7 @@ public partial class PartySetup : Control
 				ShowRoundsStep();
 		};
 		content.AddChild(backButton);
+		AddControllerHints();
 		GameUi.FocusFirstButton(this);
 	}
 
@@ -264,6 +267,13 @@ public partial class PartySetup : Control
 
 		for (int i = content.GetChildCount() - 1; i >= 2; i--)
 			content.GetChild(i).QueueFree();
+	}
+
+	private void AddControllerHints()
+	{
+		ControllerHintBar controllerHints = GameUi.CreateControllerHintBar(GameUi.ControllerHintMode.BackOnly);
+		controllerHints.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		content.AddChild(controllerHints);
 	}
 
 	private Label CreateLabel(string text, int fontSize, Color color)

@@ -43,6 +43,7 @@ public partial class PartyMode : Control
 	private Label leftHudLabel;
 	private Label rightHudLabel;
 	private HBoxContainer matchButtons;
+	private ControllerHintBar matchHintBar;
 
 	private Rect2 arenaBounds = new Rect2(new Vector2(-1500f, -900f), new Vector2(3000f, 1800f));
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
@@ -415,6 +416,7 @@ public partial class PartyMode : Control
 		p2MatchScore = 0;
 		roundIndex = 0;
 		matchButtons.Hide();
+		matchHintBar?.Hide();
 		StartNextRound();
 	}
 
@@ -435,6 +437,7 @@ public partial class PartyMode : Control
 		introTimer = 2.2f;
 		state = RoundState.Intro;
 		matchButtons.Hide();
+		matchHintBar?.Hide();
 
 		ClearWorld();
 
@@ -1350,6 +1353,7 @@ public partial class PartyMode : Control
 		ClearWorld();
 		DrawArena(true);
 		matchButtons.Show();
+		ShowMatchHints();
 		GameUi.FocusFirstButton(matchButtons);
 
 		if (p1MatchScore > p2MatchScore)
@@ -1360,5 +1364,18 @@ public partial class PartyMode : Control
 			statusText = $"Party endet unentschieden {p1MatchScore}:{p2MatchScore}.";
 
 		roundTimer = 0f;
+	}
+
+	private void ShowMatchHints()
+	{
+		if (matchHintBar == null)
+		{
+			matchHintBar = GameUi.CreateControllerHintBar(GameUi.ControllerHintMode.BackOnly);
+			GameUi.PlaceControllerHintOverlay(matchHintBar, 12f);
+			AddChild(matchHintBar);
+			return;
+		}
+
+		matchHintBar.Show();
 	}
 }

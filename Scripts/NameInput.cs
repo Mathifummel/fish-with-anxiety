@@ -220,6 +220,15 @@ public partial class NameInput : Control
 		Button retryButton = CreateButton("Nochmal");
 		retryButton.Pressed += OnRetryButtonPressed;
 		buttons.AddChild(retryButton);
+
+		MarginContainer controllerHintMargin = new MarginContainer();
+		controllerHintMargin.AddThemeConstantOverride("margin_top", 20);
+		controllerHintMargin.AddThemeConstantOverride("margin_bottom", -10);
+		content.AddChild(controllerHintMargin);
+
+		ControllerHintBar controllerHints = GameUi.CreateControllerHintBar(GameUi.ControllerHintMode.GameOver);
+		controllerHints.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		controllerHintMargin.AddChild(controllerHints);
 	}
 
 	private void AddMapBackground()

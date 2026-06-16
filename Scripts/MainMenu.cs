@@ -43,6 +43,7 @@ public partial class MainMenu : Control
 	private TextureRect controllerNoticeImage;
 	private Label controllerNoticeTitle;
 	private Label controllerNoticeName;
+	private ControllerHintBar controllerHintBar;
 	private float multiplayerNoticeTimer = 0f;
 	private float shopNoticeTimer = 0f;
 	private float controllerNoticeTimer = 0f;
@@ -53,6 +54,7 @@ public partial class MainMenu : Control
 		SetupGlassPanel();
 		SetupGameLogo();
 		CreateControllerNotice();
+		CreateControllerHints();
 		ConnectButton(ClassicButtonPath, StartClassic);
 		ConnectButton(MultiplayerButtonPath, StartMultiplayer);
 		ConnectButton(LeaderboardButtonPath, OpenLeaderboard);
@@ -104,6 +106,7 @@ public partial class MainMenu : Control
 			ResizeBackgroundViewport();
 			ResizeGameLogo();
 			PositionControllerNotice();
+			GameUi.PlaceControllerHintOverlay(controllerHintBar);
 		}
 	}
 
@@ -324,6 +327,17 @@ public partial class MainMenu : Control
 		copy.AddChild(controllerNoticeName);
 
 		PositionControllerNotice();
+	}
+
+	private void CreateControllerHints()
+	{
+		CanvasLayer ui = GetNodeOrNull<CanvasLayer>("UI");
+		if (ui == null)
+			return;
+
+		controllerHintBar = GameUi.CreateControllerHintBar();
+		GameUi.PlaceControllerHintOverlay(controllerHintBar);
+		ui.AddChild(controllerHintBar);
 	}
 
 	private void PositionControllerNotice()
