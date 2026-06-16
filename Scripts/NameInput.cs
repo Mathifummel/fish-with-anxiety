@@ -54,12 +54,27 @@ public partial class NameInput : Control
 	{
 		GameUi.EnsureInputDefaults();
 
+		if (IsRetryPressed(inputEvent))
+		{
+			GetViewport().SetInputAsHandled();
+			OnRetryButtonPressed();
+			return;
+		}
+
 		if (GameUi.IsCancelPressed(inputEvent))
 		{
 			GetViewport().SetInputAsHandled();
 			GameUi.RumbleConnectedJoypads(0.15f, 0.42f, 0.1f);
 			SaveAndExit();
 		}
+	}
+
+	private bool IsRetryPressed(InputEvent inputEvent)
+	{
+		return inputEvent is InputEventJoypadButton joyEvent &&
+			joyEvent.Pressed &&
+			!joyEvent.IsEcho() &&
+			joyEvent.ButtonIndex == JoyButton.X;
 	}
 
 	public override void _Process(double delta)
