@@ -29,22 +29,30 @@ public partial class MainMenu : Control
 	private const float HoverTweenDuration = 0.14f;
 	private const float MultiplayerNoticeDuration = 1.3f;
 	private const float ShopNoticeDuration = 1.15f;
+	private const float ControllerNoticeDuration = 3.8f;
 
+	private static bool controllerNoticeShownThisRun = false;
 	private readonly List<Button> menuButtons = new List<Button>();
 	private readonly Dictionary<Button, Tween> hoverTweens = new Dictionary<Button, Tween>();
+	private readonly HashSet<int> knownJoypads = new HashSet<int>();
 
 	private SubViewport backgroundViewport;
 	private Button multiplayerButton;
 	private Button shopButton;
 	private TextureRect gameLogo;
+	private Panel controllerNoticePanel;
+	private TextureRect controllerNoticeImage;
+	private Label controllerNoticeName;
 	private float multiplayerNoticeTimer = 0f;
 	private float shopNoticeTimer = 0f;
+	private float controllerNoticeTimer = 0f;
 
 	public override void _Ready()
 	{
 		SetupBackgroundGameplay();
 		SetupGlassPanel();
 		SetupGameLogo();
+		CreateControllerNotice();
 		ConnectButton(ClassicButtonPath, StartClassic);
 		ConnectButton(MultiplayerButtonPath, StartMultiplayer);
 		ConnectButton(LeaderboardButtonPath, OpenLeaderboard);
@@ -68,23 +76,25 @@ public partial class MainMenu : Control
 		}
 		CallDeferred(nameof(RefreshButtonPivots));
 		GameUi.FocusFirstButton(this);
+		SyncConnectedJoypads();
 		SceneTransition.FadeIn(GetTree(), 0.28f);
 	}
 
 	public override void _Process(double delta)
 	{
-		if (multiplayerNoticeTimer <= 0f || multiplayerButton == null)
+		float dt = (float)delta;
+		SyncConnectedJoypads();
+		UpdateControllerNotice(dt);
+
+		if (multiplayerNoticeTimer > 0f && multiplayerButton != null)
 		{
-			UpdateShopNotice((float)delta);
-			return;
+			multiplayerNoticeTimer -= dt;
+
+			if (multiplayerNoticeTimer <= 0f)
+				multiplayerButton.Text = "2-Spieler Modus";
 		}
 
-		multiplayerNoticeTimer -= (float)delta;
-
-		if (multiplayerNoticeTimer <= 0f)
-			multiplayerButton.Text = "2-Spieler Modus";
-
-		UpdateShopNotice((float)delta);
+		UpdateShopNotice(dt);
 	}
 
 	public override void _Notification(int what)
@@ -93,6 +103,7 @@ public partial class MainMenu : Control
 		{
 			ResizeBackgroundViewport();
 			ResizeGameLogo();
+			PositionControllerNotice();
 		}
 	}
 
@@ -260,6 +271,206 @@ public partial class MainMenu : Control
 
 		if (shopNoticeTimer <= 0f)
 			shopButton.Text = "Shop";
+	}
+
+	private void CreateControllerNotice()
+	{
+		CanvasLayer ui = GetNodeOrNull<CanvasLayer>("UI");
+		if (ui == null)
+			return;
+
+		controllerNoticePanel = new Panel();
+		controllerNoticePanel.Visible = false;
+		controllerNoticePanel.MouseFilter = MouseFilterEnum.Ignore;
+		controllerNoticePanel.AddThemeStyleboxOverride("panel", CreateControllerNoticeStyle());
+		ui.AddChild(controllerNoticePanel);
+
+		HBoxContainer row = new HBoxContainer();
+		row.AnchorRight = 1f;
+		row.AnchorBottom = 1f;
+		row.OffsetLeft = 14f;
+		row.OffsetTop = 10f;
+		row.OffsetRight = -14f;
+		row.OffsetBottom = -10f;
+		row.Alignment = BoxContainer.AlignmentMode.Center;
+		row.AddThemeConstantOverride("separation", 12);
+		controllerNoticePanel.AddChild(row);
+
+		controllerNoticeImage = new TextureRect();
+		controllerNoticeImage.CustomMinimumSize = new Vector2(104f, 70f);
+		controllerNoticeImage.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		controllerNoticeImage.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		row.AddChild(controllerNoticeImage);
+
+		VBoxContainer copy = new VBoxContainer();
+		copy.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		copy.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+		copy.AddThemeConstantOverride("separation", 3);
+		row.AddChild(copy);
+
+		Label title = new Label();
+		title.Text = "Controller erkannt";
+		title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		title.ClipText = true;
+		GameUi.ApplyLabel(title, 17, GameUi.LightText);
+		copy.AddChild(title);
+
+		controllerNoticeName = new Label();
+		controllerNoticeName.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		controllerNoticeName.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		GameUi.ApplyLabel(controllerNoticeName, 14, new Color(0.76f, 0.96f, 1f));
+		copy.AddChild(controllerNoticeName);
+
+		PositionControllerNotice();
+	}
+
+	private void PositionControllerNotice()
+	{
+		if (controllerNoticePanel == null)
+			return;
+
+		Vector2 viewport = GetViewportRect().Size;
+		float margin = 24f;
+		float availableWidth = Mathf.Max(260f, viewport.X - margin * 2f);
+		float width = Mathf.Clamp(availableWidth, 340f, 480f);
+		float height = 108f;
+
+		controllerNoticePanel.AnchorLeft = 1f;
+		controllerNoticePanel.AnchorTop = 1f;
+		controllerNoticePanel.AnchorRight = 1f;
+		controllerNoticePanel.AnchorBottom = 1f;
+		controllerNoticePanel.OffsetLeft = -width - margin;
+		controllerNoticePanel.OffsetTop = -height - margin;
+		controllerNoticePanel.OffsetRight = -margin;
+		controllerNoticePanel.OffsetBottom = -margin;
+	}
+
+	private StyleBoxFlat CreateControllerNoticeStyle()
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = new Color(0.02f, 0.12f, 0.17f, 0.92f);
+		style.BorderColor = new Color(0.7f, 0.96f, 1f, 0.82f);
+		style.BorderWidthLeft = 2;
+		style.BorderWidthTop = 2;
+		style.BorderWidthRight = 2;
+		style.BorderWidthBottom = 2;
+		style.CornerRadiusTopLeft = 4;
+		style.CornerRadiusTopRight = 4;
+		style.CornerRadiusBottomLeft = 4;
+		style.CornerRadiusBottomRight = 4;
+		style.ShadowColor = new Color(0f, 0.06f, 0.09f, 0.45f);
+		style.ShadowSize = 10;
+		return style;
+	}
+
+	private void SyncConnectedJoypads()
+	{
+		HashSet<int> connected = new HashSet<int>();
+
+		foreach (int device in Input.GetConnectedJoypads())
+		{
+			connected.Add(device);
+
+			if (knownJoypads.Contains(device))
+				continue;
+
+			knownJoypads.Add(device);
+
+			if (!controllerNoticeShownThisRun)
+				ShowControllerNotice(device);
+		}
+
+		knownJoypads.RemoveWhere(device => !connected.Contains(device));
+	}
+
+	private void ShowControllerNotice(int device)
+	{
+		if (controllerNoticePanel == null || controllerNoticeShownThisRun)
+			return;
+
+		string joyName = Input.GetJoyName(device) ?? "";
+		ControllerInfo info = GetControllerInfo(joyName);
+
+		controllerNoticeImage.Texture = ResourceLoader.Load<Texture2D>(info.TexturePath);
+		controllerNoticeName.Text = string.IsNullOrWhiteSpace(joyName)
+			? info.DisplayName
+			: $"{info.DisplayName}  ({joyName})";
+		controllerNoticePanel.Modulate = Colors.White;
+		controllerNoticePanel.Show();
+		controllerNoticeTimer = ControllerNoticeDuration;
+		controllerNoticeShownThisRun = true;
+		GameUi.RumbleConnectedJoypads(0.12f, 0.36f, 0.14f);
+	}
+
+	private void UpdateControllerNotice(float dt)
+	{
+		if (controllerNoticePanel == null || !controllerNoticePanel.Visible)
+			return;
+
+		controllerNoticeTimer -= dt;
+
+		if (controllerNoticeTimer <= 0f)
+		{
+			controllerNoticePanel.Hide();
+			return;
+		}
+
+		float alpha = Mathf.Clamp(controllerNoticeTimer, 0f, 1f);
+		controllerNoticePanel.Modulate = new Color(1f, 1f, 1f, alpha);
+	}
+
+	private ControllerInfo GetControllerInfo(string joyName)
+	{
+		string normalized = (joyName ?? "").ToLowerInvariant();
+
+		if (normalized.Contains("dualshock") ||
+			normalized.Contains("dual shock") ||
+			normalized.Contains("ps4"))
+		{
+			return new ControllerInfo(
+				"PS4 Controller",
+				"res://Assets/Controllers/controller_ps4_pixel.png"
+			);
+		}
+
+		if (normalized.Contains("dualsense") ||
+			normalized.Contains("dual sense") ||
+			normalized.Contains("ps5") ||
+			normalized.Contains("playstation"))
+		{
+			return new ControllerInfo(
+				"PS5 Controller",
+				"res://Assets/Controllers/controller_ps5_pixel.png"
+			);
+		}
+
+		if (normalized.Contains("xbox") ||
+			normalized.Contains("xinput") ||
+			normalized.Contains("microsoft"))
+		{
+			return new ControllerInfo(
+				"Neuer Xbox Controller",
+				"res://Assets/Controllers/controller_xbox_series_pixel.png"
+			);
+		}
+
+		return new ControllerInfo(
+			"Controller",
+			"res://Assets/Controllers/controller_generic_pixel.png"
+		);
+	}
+
+	private readonly struct ControllerInfo
+	{
+		public readonly string DisplayName;
+		public readonly string TexturePath;
+
+		public ControllerInfo(string displayName, string texturePath)
+		{
+			DisplayName = displayName;
+			TexturePath = texturePath;
+		}
 	}
 
 	private void ConnectButton(string path, Action handler)

@@ -36,6 +36,6 @@ project/assembly_name="Fish With Anxiety"
 
 [rendering]
 
-rendering_device/driver.windows="d3d12"
 textures/canvas_textures/default_texture_filter=0
 textures/canvas_textures/default_texture_repeat=1
+rendering_device/driver.windows="d3d12"

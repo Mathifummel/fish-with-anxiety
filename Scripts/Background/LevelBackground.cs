@@ -144,7 +144,7 @@ public partial class LevelBackground : Node2D
 		waterTexture = LoadTexture(WaterTexturePath);
 		sandTexture = LoadTexture(SandTexturePath);
 		waterSurfaceTexture = LoadTextureWithCheckerTransparency(WaterSurfaceTexturePath, 8);
-		detailPackTexture = LoadTextureWithCheckerTransparency(DetailPackTexturePath, 18);
+		detailPackTexture = LoadTextureWithCheckerTransparency(DetailPackTexturePath, -1);
 	}
 
 	private void BuildLayers()
@@ -351,6 +351,13 @@ public partial class LevelBackground : Node2D
 	{
 		int width = image.GetWidth();
 		int height = image.GetHeight();
+
+		if (preserveRadius < 0)
+		{
+			RemoveEdgeConnectedCheckerBackground(image, width, height);
+			return;
+		}
+
 		bool[] objectMask = new bool[width * height];
 
 		for (int y = 0; y < height; y++)
@@ -379,6 +386,69 @@ public partial class LevelBackground : Node2D
 				image.SetPixel(x, y, color);
 			}
 		}
+	}
+
+	private void RemoveEdgeConnectedCheckerBackground(Image image, int width, int height)
+	{
+		bool[] backgroundMask = new bool[width * height];
+		Queue<int> pending = new Queue<int>();
+
+		for (int x = 0; x < width; x++)
+		{
+			QueueCheckerPixel(image, backgroundMask, pending, x, 0, width);
+			QueueCheckerPixel(image, backgroundMask, pending, x, height - 1, width);
+		}
+
+		for (int y = 1; y < height - 1; y++)
+		{
+			QueueCheckerPixel(image, backgroundMask, pending, 0, y, width);
+			QueueCheckerPixel(image, backgroundMask, pending, width - 1, y, width);
+		}
+
+		while (pending.Count > 0)
+		{
+			int index = pending.Dequeue();
+			int x = index % width;
+			int y = index / width;
+
+			if (x > 0)
+				QueueCheckerPixel(image, backgroundMask, pending, x - 1, y, width);
+			if (x < width - 1)
+				QueueCheckerPixel(image, backgroundMask, pending, x + 1, y, width);
+			if (y > 0)
+				QueueCheckerPixel(image, backgroundMask, pending, x, y - 1, width);
+			if (y < height - 1)
+				QueueCheckerPixel(image, backgroundMask, pending, x, y + 1, width);
+		}
+
+		for (int y = 0; y < height; y++)
+		{
+			for (int x = 0; x < width; x++)
+			{
+				int index = y * width + x;
+				Color color = image.GetPixel(x, y);
+				color.A = backgroundMask[index] ? 0f : 1f;
+				image.SetPixel(x, y, color);
+			}
+		}
+	}
+
+	private void QueueCheckerPixel(
+		Image image,
+		bool[] backgroundMask,
+		Queue<int> pending,
+		int x,
+		int y,
+		int width
+	)
+	{
+		int index = y * width + x;
+
+		if (backgroundMask[index] || !IsCheckerPixel(image.GetPixel(x, y)))
+			return;
+
+		backgroundMask[index] = true;
+		pending.Enqueue(index);
 	}
 
 	private bool[] DilateMask(bool[] source, int width, int height, int radius)
