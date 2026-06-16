@@ -362,7 +362,7 @@ public static class GameUi
 			normalized.Contains("microsoft"))
 		{
 			return new ControllerInfo(
-				"Neuer Xbox Controller",
+				"Xbox Controller",
 				"res://Assets/Controllers/controller_xbox_series_pixel.png"
 			);
 		}
