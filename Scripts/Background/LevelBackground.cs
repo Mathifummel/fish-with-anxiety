@@ -59,6 +59,7 @@ public partial class LevelBackground : Node2D
 	private static readonly Dictionary<string, Texture2D> keyedTextureCache = new Dictionary<string, Texture2D>();
 
 	private readonly List<DecorationEntry> decorationEntries = new List<DecorationEntry>();
+	private readonly Dictionary<string, Texture2D> decorationTextureCache = new Dictionary<string, Texture2D>();
 
 	private enum DecorationAnchor
 	{
@@ -187,9 +188,7 @@ public partial class LevelBackground : Node2D
 			{
 				Sprite2D sprite = new Sprite2D();
 				sprite.Name = $"Deco_{spec.Anchor}_{decorationEntries.Count:00}";
-				sprite.Texture = detailPackTexture;
-				sprite.RegionEnabled = true;
-				sprite.RegionRect = spec.Source;
+				sprite.Texture = GetDecorationTexture(spec.Source);
 				sprite.Centered = true;
 				sprite.TextureFilter = TextureFilterEnum.Nearest;
 				sprite.ZIndex = spec.ZIndex;
@@ -204,6 +203,37 @@ public partial class LevelBackground : Node2D
 				});
 			}
 		}
+	}
+
+	private Texture2D GetDecorationTexture(Rect2 source)
+	{
+		string key = $"{source.Position.X:0},{source.Position.Y:0},{source.Size.X:0},{source.Size.Y:0}";
+
+		if (decorationTextureCache.TryGetValue(key, out Texture2D cachedTexture))
+			return cachedTexture;
+
+		Image sourceImage = detailPackTexture?.GetImage();
+
+		if (sourceImage == null || sourceImage.IsEmpty())
+			return detailPackTexture;
+
+		Rect2I sourceRect = new Rect2I(
+			Mathf.RoundToInt(source.Position.X),
+			Mathf.RoundToInt(source.Position.Y),
+			Mathf.RoundToInt(source.Size.X),
+			Mathf.RoundToInt(source.Size.Y)
+		);
+		Image cropped = Image.CreateEmpty(
+			Mathf.Max(1, sourceRect.Size.X),
+			Mathf.Max(1, sourceRect.Size.Y),
+			false,
+			Image.Format.Rgba8
+		);
+		cropped.BlitRect(sourceImage, sourceRect, Vector2I.Zero);
+
+		Texture2D texture = ImageTexture.CreateFromImage(cropped);
+		decorationTextureCache[key] = texture;
+		return texture;
 	}
 
 	private void UpdateLayers()

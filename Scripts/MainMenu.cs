@@ -378,6 +378,7 @@ public partial class MainMenu : Control
 
 			string joyName = Input.GetJoyName(device) ?? "";
 			knownJoypads[device] = joyName;
+			GameUi.FocusFirstButton(this);
 			ShowControllerNotice(joyName, true);
 		}
 

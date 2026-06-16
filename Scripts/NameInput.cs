@@ -118,27 +118,17 @@ public partial class NameInput : Control
 		page.SizeFlagsVertical = SizeFlags.ExpandFill;
 		pageMargin.AddChild(page);
 
-		TextureRect logo = new TextureRect();
-		logo.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Spiellogo.png");
-		logo.ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional;
-		logo.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
-		logo.SetAnchorsPreset(LayoutPreset.TopWide);
-		logo.OffsetLeft = 0f;
-		logo.OffsetTop = 0f;
-		logo.OffsetRight = 0f;
-		logo.OffsetBottom = 96f;
-		logo.MouseFilter = MouseFilterEnum.Ignore;
-		page.AddChild(logo);
-
-		CenterContainer center = new CenterContainer();
-		center.SetAnchorsPreset(LayoutPreset.FullRect);
-		page.AddChild(center);
-
 		resultPanelHost = new Control();
-		resultPanelHost.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
-		resultPanelHost.SizeFlagsVertical = SizeFlags.ShrinkCenter;
 		resultPanelHost.CustomMinimumSize = new Vector2(620, 410);
-		center.AddChild(resultPanelHost);
+		resultPanelHost.AnchorLeft = 0.5f;
+		resultPanelHost.AnchorTop = 0.5f;
+		resultPanelHost.AnchorRight = 0.5f;
+		resultPanelHost.AnchorBottom = 0.5f;
+		resultPanelHost.OffsetLeft = -310f;
+		resultPanelHost.OffsetTop = -205f;
+		resultPanelHost.OffsetRight = 310f;
+		resultPanelHost.OffsetBottom = 205f;
+		page.AddChild(resultPanelHost);
 
 		resultPanel = new PanelContainer();
 		resultPanel.SetAnchorsPreset(LayoutPreset.FullRect);
@@ -371,7 +361,6 @@ public partial class NameInput : Control
 		float shake = Mathf.Sin(effectTimer * 34f) * 2.5f * panic;
 		float appear = Mathf.Clamp(effectTimer / 0.42f, 0f, 1f);
 
-		resultPanelHost.Position = Vector2.Zero;
 		resultPanelHost.Scale = Vector2.One;
 		resultPanelHost.PivotOffset = resultPanelHost.CustomMinimumSize * 0.5f;
 

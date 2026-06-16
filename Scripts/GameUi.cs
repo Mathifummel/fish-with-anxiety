@@ -135,6 +135,14 @@ public static class GameUi
 		EnsureKeyAction("ui_accept", Key.Space);
 		EnsureJoyButtonAction("ui_accept", JoyButton.A);
 		EnsureJoyButtonAction("ui_cancel", JoyButton.B);
+		EnsureJoyButtonAction("ui_up", JoyButton.DpadUp);
+		EnsureJoyButtonAction("ui_down", JoyButton.DpadDown);
+		EnsureJoyButtonAction("ui_left", JoyButton.DpadLeft);
+		EnsureJoyButtonAction("ui_right", JoyButton.DpadRight);
+		EnsureJoyAxisAction("ui_up", JoyAxis.LeftY, -1f);
+		EnsureJoyAxisAction("ui_down", JoyAxis.LeftY, 1f);
+		EnsureJoyAxisAction("ui_left", JoyAxis.LeftX, -1f);
+		EnsureJoyAxisAction("ui_right", JoyAxis.LeftX, 1f);
 		EnsureJoyButtonAction("pause", JoyButton.Start);
 	}
 
@@ -242,6 +250,27 @@ public static class GameUi
 
 		InputEventJoypadButton newEvent = new InputEventJoypadButton();
 		newEvent.ButtonIndex = button;
+		InputMap.ActionAddEvent(action, newEvent);
+	}
+
+	private static void EnsureJoyAxisAction(string action, JoyAxis axis, float axisValue)
+	{
+		if (!InputMap.HasAction(action))
+			InputMap.AddAction(action);
+
+		foreach (InputEvent inputEvent in InputMap.ActionGetEvents(action))
+		{
+			if (inputEvent is InputEventJoypadMotion motionEvent &&
+				motionEvent.Axis == axis &&
+				Mathf.Sign(motionEvent.AxisValue) == Mathf.Sign(axisValue))
+			{
+				return;
+			}
+		}
+
+		InputEventJoypadMotion newEvent = new InputEventJoypadMotion();
+		newEvent.Axis = axis;
+		newEvent.AxisValue = axisValue;
 		InputMap.ActionAddEvent(action, newEvent);
 	}
 
