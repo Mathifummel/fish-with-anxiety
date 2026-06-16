@@ -5,7 +5,7 @@ public partial class NameInput : Control
 	private LineEdit nameField;
 	private ColorRect stressOverlay;
 	private ColorRect blushOverlay;
-	private VideoStreamPlayer backgroundVideo;
+	private OceanMapBackground backgroundMap;
 	private PanelContainer resultPanel;
 	private CanvasLayer backdropLayer;
 	private Node2D deathFishLayer;
@@ -60,7 +60,6 @@ public partial class NameInput : Control
 		float dt = (float)delta;
 		effectTimer += dt;
 		UpdateDecisionTimer(dt);
-		AnimateBackground();
 		AnimateDeathBackdrop();
 		AnimateResultPanel();
 
@@ -101,7 +100,7 @@ public partial class NameInput : Control
 		backdropLayer.Layer = -2;
 		AddChild(backdropLayer);
 
-		AddVideoBackground();
+		AddMapBackground();
 		AddDeathBackdropFish();
 		AddTintOverlay();
 		AddDeathEffectOverlay();
@@ -122,7 +121,7 @@ public partial class NameInput : Control
 		pageMargin.AddChild(page);
 
 		TextureRect logo = new TextureRect();
-		logo.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Logo.png");
+		logo.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Spiellogo.png");
 		logo.ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional;
 		logo.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
 		logo.CustomMinimumSize = new Vector2(500, 96);
@@ -225,17 +224,11 @@ public partial class NameInput : Control
 		buttons.AddChild(retryButton);
 	}
 
-	private void AddVideoBackground()
+	private void AddMapBackground()
 	{
-		backgroundVideo = new VideoStreamPlayer();
-		backgroundVideo.Stream = ResourceLoader.Load<VideoStream>("res://Assets/underwater.ogv");
-		backgroundVideo.SpeedScale = 2.57f;
-		backgroundVideo.Autoplay = true;
-		backgroundVideo.Expand = true;
-		backgroundVideo.Loop = true;
-		backgroundVideo.SetAnchorsPreset(LayoutPreset.FullRect);
-		backgroundVideo.PivotOffset = GetViewportRect().Size * 0.5f;
-		backdropLayer.AddChild(backgroundVideo);
+		backgroundMap = new OceanMapBackground();
+		backgroundMap.ConfigureForScreen();
+		backdropLayer.AddChild(backgroundMap);
 	}
 
 	private void AddDeathBackdropFish()
@@ -290,23 +283,6 @@ public partial class NameInput : Control
 		fish.Scale = scale;
 		fish.Modulate = new Color(1f, 1f, 1f, alpha);
 		return fish;
-	}
-
-	private void AnimateBackground()
-	{
-		if (backgroundVideo == null)
-			return;
-
-		float calm = Mathf.Clamp(effectTimer / 2.4f, 0f, 1f);
-		float driftX = Mathf.Sin(effectTimer * 0.1f) * Mathf.Lerp(22f, 8f, calm);
-		float driftY = Mathf.Cos(effectTimer * 0.085f) * Mathf.Lerp(16f, 6f, calm);
-		float zoom = 1.04f + Mathf.Sin(effectTimer * 0.06f) * Mathf.Lerp(0.016f, 0.006f, calm);
-
-		backgroundVideo.OffsetLeft = -44f + driftX;
-		backgroundVideo.OffsetTop = -34f + driftY;
-		backgroundVideo.OffsetRight = 44f + driftX;
-		backgroundVideo.OffsetBottom = 34f + driftY;
-		backgroundVideo.Scale = new Vector2(zoom, zoom);
 	}
 
 	private void AnimateDeathBackdrop()

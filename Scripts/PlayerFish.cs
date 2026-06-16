@@ -35,6 +35,11 @@ public partial class PlayerFish : CharacterBody2D
 	[Export] public float SwimFrequency = 5f;
 	[Export] public float SwimFrameRate = 7.5f;
 	[Export] public float DirectionFlipDeadzone = 12f;
+	[Export] public bool UseSwimBounds = true;
+	[Export] public float MinSwimY = OceanMapBackground.WorldPlayerMinY;
+	[Export] public float MaxSwimY = OceanMapBackground.WorldPlayerMaxY;
+	[Export] public float BoundarySoftZone = 92f;
+	[Export] public float BoundaryPushSpeed = 250f;
 
 	// =========================================
 	// BOOST ZONES
@@ -307,6 +312,7 @@ public partial class PlayerFish : CharacterBody2D
 		Velocity = currentVelocity;
 
 		MoveAndSlide();
+		ApplyVerticalSwimBounds(dt);
 		UpdateInvincibleVisual();
 
 		// =========================================
@@ -346,6 +352,47 @@ public partial class PlayerFish : CharacterBody2D
 			facingDirection = 1;
 		else if (Velocity.X < -DirectionFlipDeadzone)
 			facingDirection = -1;
+	}
+
+	private void ApplyVerticalSwimBounds(float dt)
+	{
+		if (!UseSwimBounds)
+			return;
+
+		Vector2 position = GlobalPosition;
+		bool adjusted = false;
+
+		if (position.Y < MinSwimY)
+		{
+			position.Y = MinSwimY;
+			currentVelocity.Y = Mathf.Max(currentVelocity.Y, BoundaryPushSpeed);
+			adjusted = true;
+		}
+		else if (position.Y < MinSwimY + BoundarySoftZone && currentVelocity.Y < BoundaryPushSpeed * 0.45f)
+		{
+			float pressure = 1f - ((position.Y - MinSwimY) / Mathf.Max(BoundarySoftZone, 1f));
+			currentVelocity.Y = Mathf.Lerp(currentVelocity.Y, BoundaryPushSpeed * 0.58f, Mathf.Clamp(dt * 6.5f * pressure, 0f, 1f));
+			adjusted = true;
+		}
+
+		if (position.Y > MaxSwimY)
+		{
+			position.Y = MaxSwimY;
+			currentVelocity.Y = Mathf.Min(currentVelocity.Y, -BoundaryPushSpeed * 0.75f);
+			adjusted = true;
+		}
+		else if (position.Y > MaxSwimY - BoundarySoftZone && currentVelocity.Y > -BoundaryPushSpeed * 0.35f)
+		{
+			float pressure = 1f - ((MaxSwimY - position.Y) / Mathf.Max(BoundarySoftZone, 1f));
+			currentVelocity.Y = Mathf.Lerp(currentVelocity.Y, -BoundaryPushSpeed * 0.45f, Mathf.Clamp(dt * 5f * pressure, 0f, 1f));
+			adjusted = true;
+		}
+
+		if (!adjusted)
+			return;
+
+		GlobalPosition = position;
+		Velocity = currentVelocity;
 	}
 
 	private void UpdateSwimFrame()

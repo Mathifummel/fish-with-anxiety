@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cw08k75mwrjh3"
-path="res://.godot/imported/Logo.png-95a3481791cd872ee4e9e0d7aa179c5c.ctex"
+uid="uid://bl72a7kga3h1a"
+path="res://.godot/imported/WasserÜbergang.png-73e48c5aef7d0cc52002456eaac7b2ca.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Logo.png"
-dest_files=["res://.godot/imported/Logo.png-95a3481791cd872ee4e9e0d7aa179c5c.ctex"]
+source_file="res://Assets/WasserÜbergang.png"
+dest_files=["res://.godot/imported/WasserÜbergang.png-73e48c5aef7d0cc52002456eaac7b2ca.ctex"]
 
 [params]
 

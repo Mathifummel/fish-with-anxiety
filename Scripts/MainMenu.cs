@@ -18,34 +18,54 @@ public partial class MainMenu : Control
 	private const string MultiplayerButtonPath = "UI/PanelLeft/VBoxContainer/Multiplayer";
 	private const string LeaderboardButtonPath = "UI/PanelLeft/VBoxContainer/Leaderboard";
 	private const string TutorialButtonPath = "UI/PanelLeft/VBoxContainer/Tutorial";
+	private const string ShopButtonPath = "UI/PanelLeft/VBoxContainer/Shop";
 	private const string SettingsButtonPath = "UI/PanelLeft/VBoxContainer/Einstellungen";
 	private const string CreditsButtonPath = "UI/PanelLeft/VBoxContainer/Credits";
 	private const string QuitButtonPath = "UI/PanelLeft/VBoxContainer/Beenden";
+	private const string MenuLogoPath = "UI/GameLogo";
+	private const string GameLogoTexturePath = "res://Assets/Transparaentlogo.png";
 
 	private const float HoverScale = 1.05f;
 	private const float HoverTweenDuration = 0.14f;
 	private const float MultiplayerNoticeDuration = 1.3f;
+	private const float ShopNoticeDuration = 1.15f;
 
 	private readonly List<Button> menuButtons = new List<Button>();
 	private readonly Dictionary<Button, Tween> hoverTweens = new Dictionary<Button, Tween>();
 
 	private SubViewport backgroundViewport;
 	private Button multiplayerButton;
+	private Button shopButton;
+	private TextureRect gameLogo;
 	private float multiplayerNoticeTimer = 0f;
+	private float shopNoticeTimer = 0f;
 
 	public override void _Ready()
 	{
 		SetupBackgroundGameplay();
 		SetupGlassPanel();
+		SetupGameLogo();
 		ConnectButton(ClassicButtonPath, StartClassic);
 		ConnectButton(MultiplayerButtonPath, StartMultiplayer);
 		ConnectButton(LeaderboardButtonPath, OpenLeaderboard);
 		ConnectButton(TutorialButtonPath, OpenTutorial);
+		ConnectButton(ShopButtonPath, OpenShop);
 		ConnectButton(SettingsButtonPath, OpenSettings);
 		ConnectButton(CreditsButtonPath, OpenCredits);
 		ConnectButton(QuitButtonPath, QuitGame);
 
 		multiplayerButton = GetNodeOrNull<Button>(MultiplayerButtonPath);
+		shopButton = GetNodeOrNull<Button>(ShopButtonPath);
+		if (shopButton != null)
+		{
+			Texture2D shopTexture = ResourceLoader.Load<Texture2D>("res://Assets/Shop.png");
+			if (shopTexture != null)
+			{
+				shopButton.Icon = shopTexture;
+				shopButton.ExpandIcon = true;
+				shopButton.IconAlignment = HorizontalAlignment.Left;
+			}
+		}
 		CallDeferred(nameof(RefreshButtonPivots));
 		GameUi.FocusFirstButton(this);
 		SceneTransition.FadeIn(GetTree(), 0.28f);
@@ -54,18 +74,26 @@ public partial class MainMenu : Control
 	public override void _Process(double delta)
 	{
 		if (multiplayerNoticeTimer <= 0f || multiplayerButton == null)
+		{
+			UpdateShopNotice((float)delta);
 			return;
+		}
 
 		multiplayerNoticeTimer -= (float)delta;
 
 		if (multiplayerNoticeTimer <= 0f)
 			multiplayerButton.Text = "2-Spieler Modus";
+
+		UpdateShopNotice((float)delta);
 	}
 
 	public override void _Notification(int what)
 	{
 		if (what == NotificationResized)
+		{
 			ResizeBackgroundViewport();
+			ResizeGameLogo();
+		}
 	}
 
 	public void StartClassic()
@@ -86,6 +114,15 @@ public partial class MainMenu : Control
 	public void OpenTutorial()
 	{
 		ChangeScene(TutorialScenePath);
+	}
+
+	public void OpenShop()
+	{
+		if (shopButton == null)
+			return;
+
+		shopButton.Text = "Shop kommt bald";
+		shopNoticeTimer = ShopNoticeDuration;
 	}
 
 	public void OpenSettings()
@@ -146,11 +183,83 @@ public partial class MainMenu : Control
 			return;
 		}
 
-		panel.CustomMinimumSize = new Vector2(300, 0);
+		panel.CustomMinimumSize = new Vector2(316, 0);
 		panel.AddThemeStyleboxOverride("panel", CreatePanelStyle());
 
 		if (menuBox != null)
 			menuBox.AddThemeConstantOverride("separation", 12);
+	}
+
+	private void SetupGameLogo()
+	{
+		CanvasLayer ui = GetNodeOrNull<CanvasLayer>("UI");
+		if (ui == null)
+			return;
+
+		gameLogo = GetNodeOrNull<TextureRect>(MenuLogoPath);
+
+		if (gameLogo == null)
+		{
+			gameLogo = new TextureRect();
+			gameLogo.Name = "GameLogo";
+			ui.AddChild(gameLogo);
+		}
+
+		gameLogo.Texture = ResourceLoader.Load<Texture2D>(GameLogoTexturePath);
+		gameLogo.MouseFilter = MouseFilterEnum.Ignore;
+		gameLogo.ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional;
+		gameLogo.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		gameLogo.Modulate = new Color(1f, 1f, 1f, 0.96f);
+		gameLogo.SetAnchorsPreset(LayoutPreset.TopLeft);
+		ResizeGameLogo();
+	}
+
+	private void ResizeGameLogo()
+	{
+		if (gameLogo == null)
+			return;
+
+		Vector2 viewport = GetViewportRect().Size;
+		if (viewport.X <= 1f || viewport.Y <= 1f)
+			viewport = new Vector2(1280f, 720f);
+
+		float rightMargin = Mathf.Clamp(viewport.X * 0.035f, 30f, 54f);
+		float leftSafe = Mathf.Clamp(viewport.X * 0.34f, 390f, 470f);
+		float availableWidth = Mathf.Max(280f, viewport.X - leftSafe - rightMargin);
+		float width = Mathf.Min(viewport.X * 0.58f, availableWidth);
+		width = Mathf.Clamp(width, 330f, 760f);
+
+		float aspect = 16f / 9f;
+		if (gameLogo.Texture != null && gameLogo.Texture.GetHeight() > 0)
+			aspect = gameLogo.Texture.GetWidth() / (float)gameLogo.Texture.GetHeight();
+
+		float height = width / Mathf.Max(aspect, 0.1f);
+		float maxHeight = viewport.Y * 0.66f;
+
+		if (height > maxHeight)
+		{
+			height = maxHeight;
+			width = height * aspect;
+		}
+
+		float x = viewport.X - rightMargin - width;
+		float y = viewport.Y * 0.5f - height * 0.5f;
+		y = Mathf.Clamp(y, 24f, Mathf.Max(24f, viewport.Y - height - 24f));
+
+		gameLogo.Position = new Vector2(x, y);
+		gameLogo.Size = new Vector2(width, height);
+		gameLogo.CustomMinimumSize = gameLogo.Size;
+	}
+
+	private void UpdateShopNotice(float dt)
+	{
+		if (shopNoticeTimer <= 0f || shopButton == null)
+			return;
+
+		shopNoticeTimer -= dt;
+
+		if (shopNoticeTimer <= 0f)
+			shopButton.Text = "Shop";
 	}
 
 	private void ConnectButton(string path, Action handler)

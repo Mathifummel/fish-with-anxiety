@@ -14,6 +14,7 @@ public partial class TutorialMode : Node2D
 		Coin,
 		Boost,
 		Dodge,
+		CrossingWarning,
 		GoodItem,
 		Trash,
 		Finish
@@ -33,6 +34,9 @@ public partial class TutorialMode : Node2D
 	private Node2D targetMarker;
 	private Node2D activePickup;
 	private NPCFish trainingNpc;
+	private NPCFish crossingNpc;
+	private Sprite2D warningMarker;
+	private Texture2D warningTexture;
 
 	private TutorialPhase phase = TutorialPhase.Move;
 	private Vector2 targetPosition;
@@ -43,11 +47,14 @@ public partial class TutorialMode : Node2D
 	private bool trashCollected = false;
 	private bool goodItemCollected = false;
 	private bool boostUsed = false;
-	private VideoStreamPlayer backgroundVideo;
+	private bool crossingFishSpawned = false;
+	private OceanMapBackground backgroundMap;
 
 	public override void _Ready()
 	{
 		PlayerFish.LoadControlSettings();
+		warningTexture =
+			ResourceLoader.Load<Texture2D>("res://Assets/exclamation_spritesheet_01.png");
 		CreateBackgroundLayer();
 		CreateTargetMarker();
 		CreateUi();
@@ -68,7 +75,6 @@ public partial class TutorialMode : Node2D
 		visualTime += dt;
 		phaseTimer += dt;
 
-		AnimateBackground();
 		AnimateTargetMarker();
 		UpdateHintArrow();
 		UpdatePhase(dt);
@@ -99,6 +105,7 @@ public partial class TutorialMode : Node2D
 		trashCollected = false;
 		goodItemCollected = false;
 		boostUsed = false;
+		crossingFishSpawned = false;
 
 		switch (phase)
 		{
@@ -106,7 +113,7 @@ public partial class TutorialMode : Node2D
 				stress = 0f;
 				SetTarget(Player.Position + new Vector2(430f, -80f), true);
 				SetText(
-					"1 / 6  Bewegung",
+					"1 / 7  Bewegung",
 					"Schwimm durch den leuchtenden Kreis.",
 					"Benutze deine eingestellte Steuerung. Im Tutorial passiert nichts Schlimmes, solange du ausprobierst."
 				);
@@ -117,7 +124,7 @@ public partial class TutorialMode : Node2D
 				activePickup = CreateSpritePickup("res://Assets/m\u00FCnze.png", Player.Position + new Vector2(390f, 120f), new Vector2(1f, 1f));
 				SetTarget(activePickup.Position, false);
 				SetText(
-					"2 / 6  Münzen",
+					"2 / 7  Münzen",
 					"Sammle die Münze ein.",
 					"Münzen geben Bonuspunkte. In diesem Tutorial landet sie nur als Übung in deiner Tasche."
 				);
@@ -128,7 +135,7 @@ public partial class TutorialMode : Node2D
 				Player.CurrentStress = stress;
 				SetTarget(Player.Position + new Vector2(520f, 0f), true);
 				SetText(
-					"3 / 6  Boost",
+					"3 / 7  Boost",
 					"Löse einen Boost aus und schiess zum Zielkreis.",
 					$"Boost: {GetBoostHint()}. Bei mittlerem Stress ist der Boost am stärksten."
 				);
@@ -139,9 +146,20 @@ public partial class TutorialMode : Node2D
 				SpawnTrainingNpc();
 				SetTarget(Vector2.Zero, false);
 				SetText(
-					"4 / 6  Stress & Gegner",
+					"4 / 7  Stress & Gegner",
 					"Weich dem Gegner aus, bis der Timer voll ist.",
 					"Wenn er nah kommt, steigt Stress. Abstand halten senkt ihn wieder."
+				);
+				break;
+
+			case TutorialPhase.CrossingWarning:
+				stress = 20f;
+				SetTarget(Vector2.Zero, false);
+				CreateWarningMarker();
+				SetText(
+					"5 / 7  Achtung",
+					"Achte auf das Warnzeichen und bleib aus der Bahn.",
+					"Wenn Achtung auftaucht, rast gleich ein schneller Fisch quer durch den Screen."
 				);
 				break;
 
@@ -150,7 +168,7 @@ public partial class TutorialMode : Node2D
 				activePickup = CreateSpritePickup("res://Assets/Alkohol.png", Player.Position + new Vector2(380f, -150f), new Vector2(1f, 1f));
 				SetTarget(activePickup.Position, false);
 				SetText(
-					"5 / 6  Gute Items",
+					"6 / 7  Gute Items",
 					"Folge dem Pfeil und sammle das gute Item.",
 					"Nützliche Items wie Alkohol oder Chorusfrucht können dich retten. Der Pfeil zeigt auf solche Items."
 				);
@@ -161,7 +179,7 @@ public partial class TutorialMode : Node2D
 				activePickup = CreateSpritePickup("res://Assets/M\u00FCll.png", Player.Position + new Vector2(360f, 130f), new Vector2(1f, 1f));
 				SetTarget(activePickup.Position, false);
 				SetText(
-					"6 / 6  Müll",
+					"7 / 7  Müll",
 					"Sammle den Müll ein und schwimm danach zum Kreis.",
 					"Müll ist ein schlechtes Item: Es bremst dich kurz aus."
 				);
@@ -177,7 +195,7 @@ public partial class TutorialMode : Node2D
 				SetText(
 					"Training geschafft",
 					"Du bist bereit für den offenen Ozean.",
-					"Du kennst jetzt Bewegung, Münzen, Boost, Stress, hilfreiche Items und Müll."
+					"Du kennst jetzt Bewegung, Münzen, Boost, Stress, Achtung-Warnungen, hilfreiche Items und Müll."
 				);
 				ShowFinishButtons();
 				break;
@@ -228,10 +246,26 @@ public partial class TutorialMode : Node2D
 					return;
 				}
 
-				safeTimer += dt;
+				if (stress > 70f)
+				{
+					safeTimer = Mathf.Max(0f, safeTimer - dt * 1.6f);
+					feedbackLabel.Text = "Noch zu nah. Erst Abstand finden, dann zählt die Zeit.";
+				}
+				else
+				{
+					safeTimer += dt;
+				}
+
 				progressLabel.Text = $"Abstand halten: {Mathf.CeilToInt(Mathf.Max(0f, 4.5f - safeTimer))}s";
 
 				if (safeTimer >= 4.5f)
+					StartPhase(TutorialPhase.CrossingWarning);
+				break;
+
+			case TutorialPhase.CrossingWarning:
+				UpdateCrossingWarningStep();
+
+				if (phaseTimer >= 4.2f)
 					StartPhase(TutorialPhase.GoodItem);
 				break;
 
@@ -303,6 +337,72 @@ public partial class TutorialMode : Node2D
 			: Vector2.Up;
 
 		trainingNpc.Position = Player.Position - side * 520f;
+	}
+
+	private void CreateWarningMarker()
+	{
+		warningMarker = new Sprite2D();
+		warningMarker.Texture = warningTexture;
+		warningMarker.Hframes = 8;
+		warningMarker.Frame = 6;
+		warningMarker.Centered = true;
+		warningMarker.ZIndex = 120;
+		warningMarker.Scale = new Vector2(2.45f, 2.45f);
+		warningMarker.Modulate = new Color(1f, 1f, 1f, 0.95f);
+		warningMarker.Position = GetCrossingWarningPosition();
+		AddChild(warningMarker);
+	}
+
+	private void UpdateCrossingWarningStep()
+	{
+		if (warningMarker != null && IsInstanceValid(warningMarker))
+		{
+			float progress = Mathf.Clamp(phaseTimer / 1.55f, 0f, 1f);
+			float pulse = Mathf.Sin(progress * Mathf.Tau * 2.5f);
+			float scale = 2.3f + pulse * 0.28f;
+
+			warningMarker.Position = GetCrossingWarningPosition();
+			warningMarker.Scale = new Vector2(scale, scale);
+			warningMarker.Frame = Mathf.PosMod((int)(progress * 16f), 8);
+			warningMarker.Modulate =
+				new Color(1f, 1f, 1f, 0.72f + Mathf.Abs(pulse) * 0.24f);
+		}
+
+		if (!crossingFishSpawned && phaseTimer >= 1.55f)
+		{
+			crossingFishSpawned = true;
+			feedbackLabel.Text = "Da ist er. Seitlich ausweichen, nicht in die Bahn schwimmen.";
+
+			if (warningMarker != null && IsInstanceValid(warningMarker))
+			{
+				warningMarker.QueueFree();
+				warningMarker = null;
+			}
+
+			SpawnCrossingTutorialNpc();
+		}
+	}
+
+	private Vector2 GetCrossingWarningPosition()
+	{
+		Vector2 viewport = GetViewportRect().Size;
+		return Player.Position + new Vector2(-Mathf.Max(viewport.X * 0.42f, 360f), -38f);
+	}
+
+	private void SpawnCrossingTutorialNpc()
+	{
+		crossingNpc = NPCFishScene.Instantiate<NPCFish>();
+		crossingNpc.Player = Player;
+		crossingNpc.Mode = NPCFish.MovementMode.Crossing;
+		crossingNpc.CrossingDirection = Vector2.Right;
+		crossingNpc.CrossingLifetime = 3.2f;
+		crossingNpc.Speed = 520f;
+
+		Vector2 viewport = GetViewportRect().Size;
+		crossingNpc.Position =
+			Player.Position + new Vector2(-Mathf.Max(viewport.X * 0.58f, 520f), -38f);
+		crossingNpc.SetPhysicsProcess(true);
+		AddChild(crossingNpc);
 	}
 
 	private void UpdateTutorialStress(float dt)
@@ -388,6 +488,16 @@ public partial class TutorialMode : Node2D
 
 		trainingNpc = null;
 
+		if (crossingNpc != null && IsInstanceValid(crossingNpc))
+			crossingNpc.QueueFree();
+
+		crossingNpc = null;
+
+		if (warningMarker != null && IsInstanceValid(warningMarker))
+			warningMarker.QueueFree();
+
+		warningMarker = null;
+
 		if (Player != null)
 		{
 			Player.SetInvincible(false);
@@ -397,36 +507,10 @@ public partial class TutorialMode : Node2D
 
 	private void CreateBackgroundLayer()
 	{
-		CanvasLayer backgroundLayer = new CanvasLayer();
-		backgroundLayer.Layer = -20;
-		AddChild(backgroundLayer);
-
-		backgroundVideo = new VideoStreamPlayer();
-		backgroundVideo.Stream = ResourceLoader.Load<VideoStream>("res://Assets/underwater.ogv");
-		backgroundVideo.SpeedScale = 2.57f;
-		backgroundVideo.Autoplay = true;
-		backgroundVideo.Expand = true;
-		backgroundVideo.Loop = true;
-		backgroundVideo.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		backgroundLayer.AddChild(backgroundVideo);
-
-		ColorRect overlay = new ColorRect();
-		overlay.Color = new Color(0.01f, 0.06f, 0.09f, 0.28f);
-		overlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		backgroundLayer.AddChild(overlay);
-	}
-
-	private void AnimateBackground()
-	{
-		if (backgroundVideo == null)
-			return;
-
-		float driftX = Mathf.Sin(visualTime * 0.15f) * 22f;
-		float driftY = Mathf.Cos(visualTime * 0.12f) * 14f;
-		backgroundVideo.OffsetLeft = -52f + driftX;
-		backgroundVideo.OffsetTop = -42f + driftY;
-		backgroundVideo.OffsetRight = 52f + driftX;
-		backgroundVideo.OffsetBottom = 42f + driftY;
+		backgroundMap = new OceanMapBackground();
+		backgroundMap.ConfigureForWorld(Player);
+		AddChild(backgroundMap);
+		MoveChild(backgroundMap, 0);
 	}
 
 	private void CreateTargetMarker()

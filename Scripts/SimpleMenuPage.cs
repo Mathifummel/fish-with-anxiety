@@ -6,9 +6,17 @@ public partial class SimpleMenuPage : Control
 
 	public override void _Ready()
 	{
+		OceanMapBackground mapBackground = new OceanMapBackground();
+		mapBackground.ConfigureForScreen();
+		AddChild(mapBackground);
+		MoveChild(mapBackground, 0);
+
 		ColorRect background = GetNodeOrNull<ColorRect>("Background");
 		if (background != null)
-			background.Color = new Color(0.72f, 0.94f, 1f, 0.16f);
+		{
+			background.Color = new Color(0.01f, 0.06f, 0.09f, 0.18f);
+			background.MouseFilter = MouseFilterEnum.Ignore;
+		}
 
 		PanelContainer panel = GetNodeOrNull<PanelContainer>("Panel");
 		if (panel != null)

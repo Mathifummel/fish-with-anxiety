@@ -1,0 +1,277 @@
+using Godot;
+using System.Collections.Generic;
+
+public partial class Settings : Control
+{
+	private VBoxContainer customBindings;
+	private Label captureLabel;
+	private Label statusLabel;
+	private string pendingCustomAction = "";
+
+	private readonly Dictionary<PlayerFish.ControlScheme, Button> modeButtons =
+		new Dictionary<PlayerFish.ControlScheme, Button>();
+	private readonly Dictionary<string, Button> customButtons = new Dictionary<string, Button>();
+
+	public override void _Ready()
+	{
+		PlayerFish.LoadControlSettings();
+		BuildUi();
+		UpdateModeButtonLabels();
+		UpdateCustomButtonLabels();
+		UpdateStatus("Bereit");
+		GameUi.FocusFirstButton(this);
+		SceneTransition.FadeIn(GetTree(), 0.24f);
+	}
+
+	public override void _UnhandledInput(InputEvent inputEvent)
+	{
+		if (!string.IsNullOrEmpty(pendingCustomAction))
+		{
+			if (inputEvent is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
+			{
+				if (IsEscapeKey(keyEvent))
+				{
+					CancelCapture();
+					GetViewport().SetInputAsHandled();
+					return;
+				}
+
+				InputEventKey captureKey = new InputEventKey();
+				captureKey.PhysicalKeycode = keyEvent.PhysicalKeycode;
+				captureKey.Keycode = keyEvent.Keycode;
+				PlayerFish.SetCustomInput(pendingCustomAction, captureKey);
+				FinishCapture("Taste gespeichert");
+				GetViewport().SetInputAsHandled();
+				return;
+			}
+
+			if (inputEvent is InputEventMouseButton mouseEvent && mouseEvent.Pressed)
+			{
+				InputEventMouseButton captureMouse = new InputEventMouseButton();
+				captureMouse.ButtonIndex = mouseEvent.ButtonIndex;
+				PlayerFish.SetCustomInput(pendingCustomAction, captureMouse);
+				FinishCapture("Mausknopf gespeichert");
+				GetViewport().SetInputAsHandled();
+				return;
+			}
+		}
+
+		if (GameUi.IsCancelPressed(inputEvent))
+		{
+			GetViewport().SetInputAsHandled();
+			GoBack();
+		}
+	}
+
+	private void BuildUi()
+	{
+		OceanMapBackground background = new OceanMapBackground();
+		background.ConfigureForScreen();
+		AddChild(background);
+		MoveChild(background, 0);
+
+		ColorRect overlay = new ColorRect();
+		overlay.Color = new Color(0.01f, 0.06f, 0.09f, 0.34f);
+		overlay.MouseFilter = MouseFilterEnum.Ignore;
+		overlay.SetAnchorsPreset(LayoutPreset.FullRect);
+		AddChild(overlay);
+
+		Panel panel = new Panel();
+		panel.AnchorLeft = 0.5f;
+		panel.AnchorTop = 0.5f;
+		panel.AnchorRight = 0.5f;
+		panel.AnchorBottom = 0.5f;
+		panel.OffsetLeft = -330f;
+		panel.OffsetTop = -315f;
+		panel.OffsetRight = 330f;
+		panel.OffsetBottom = 315f;
+		panel.AddThemeStyleboxOverride("panel", GameUi.CreatePanelStyle());
+		AddChild(panel);
+
+		VBoxContainer layout = new VBoxContainer();
+		layout.SetAnchorsPreset(LayoutPreset.FullRect);
+		layout.OffsetLeft = 28f;
+		layout.OffsetTop = 24f;
+		layout.OffsetRight = -28f;
+		layout.OffsetBottom = -24f;
+		layout.AddThemeConstantOverride("separation", 12);
+		panel.AddChild(layout);
+
+		Label title = CreateLabel("Einstellungen", 30, GameUi.LightText);
+		title.HorizontalAlignment = HorizontalAlignment.Center;
+		layout.AddChild(title);
+
+		Label controlsTitle = CreateLabel("Steuerung", 20, GameUi.AccentText);
+		controlsTitle.HorizontalAlignment = HorizontalAlignment.Center;
+		layout.AddChild(controlsTitle);
+
+		GridContainer modes = new GridContainer();
+		modes.Columns = 2;
+		modes.AddThemeConstantOverride("h_separation", 10);
+		modes.AddThemeConstantOverride("v_separation", 10);
+		layout.AddChild(modes);
+
+		AddModeButton(modes, "Pfeiltasten", PlayerFish.ControlScheme.ArrowKeys);
+		AddModeButton(modes, "WASD", PlayerFish.ControlScheme.WASD);
+		AddModeButton(modes, "Maus", PlayerFish.ControlScheme.Mouse);
+		AddModeButton(modes, "Eigene Tasten", PlayerFish.ControlScheme.Custom);
+
+		customBindings = new VBoxContainer();
+		customBindings.AddThemeConstantOverride("separation", 7);
+		layout.AddChild(customBindings);
+
+		AddCustomBindingButton("Hoch", PlayerFish.CustomMoveUp);
+		AddCustomBindingButton("Runter", PlayerFish.CustomMoveDown);
+		AddCustomBindingButton("Links", PlayerFish.CustomMoveLeft);
+		AddCustomBindingButton("Rechts", PlayerFish.CustomMoveRight);
+		AddCustomBindingButton("Boost", PlayerFish.CustomBoost);
+
+		captureLabel = CreateLabel("", 15, GameUi.AccentText);
+		captureLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		layout.AddChild(captureLabel);
+
+		statusLabel = CreateLabel("", 16, new Color(0.7f, 1f, 0.86f));
+		statusLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		layout.AddChild(statusLabel);
+
+		HBoxContainer actions = new HBoxContainer();
+		actions.Alignment = BoxContainer.AlignmentMode.Center;
+		actions.AddThemeConstantOverride("separation", 12);
+		layout.AddChild(actions);
+
+		Button resetButton = CreateMenuButton("Tasten resetten");
+		resetButton.Pressed += ResetCustomBindings;
+		actions.AddChild(resetButton);
+
+		Button backButton = CreateMenuButton("Zurueck");
+		backButton.Pressed += GoBack;
+		actions.AddChild(backButton);
+	}
+
+	private Label CreateLabel(string text, int size, Color color)
+	{
+		Label label = new Label();
+		label.Text = text;
+		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		GameUi.ApplyLabel(label, size, color);
+		return label;
+	}
+
+	private Button CreateMenuButton(string text)
+	{
+		Button button = new Button();
+		button.Text = text;
+		button.CustomMinimumSize = new Vector2(220f, 42f);
+		button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		GameUi.ApplyButton(button, 16);
+		return button;
+	}
+
+	private void AddModeButton(GridContainer parent, string text, PlayerFish.ControlScheme scheme)
+	{
+		Button button = CreateMenuButton(text);
+		button.Pressed += () => SelectControlScheme(scheme);
+		parent.AddChild(button);
+		modeButtons[scheme] = button;
+	}
+
+	private void AddCustomBindingButton(string label, string action)
+	{
+		Button button = CreateMenuButton("");
+		button.Pressed += () =>
+		{
+			pendingCustomAction = action;
+			captureLabel.Text = $"{label}: Taste oder Mausklick druecken";
+			UpdateStatus("Esc bricht ab");
+		};
+
+		customBindings.AddChild(button);
+		customButtons[action] = button;
+	}
+
+	private void SelectControlScheme(PlayerFish.ControlScheme scheme)
+	{
+		PlayerFish.SetControlScheme(scheme);
+		UpdateModeButtonLabels();
+		UpdateCustomButtonLabels();
+		UpdateStatus("Gespeichert");
+	}
+
+	private void UpdateModeButtonLabels()
+	{
+		foreach (KeyValuePair<PlayerFish.ControlScheme, Button> pair in modeButtons)
+			GameUi.ApplyButton(pair.Value, 16, pair.Key == PlayerFish.CurrentControlScheme);
+
+		if (customBindings != null)
+			customBindings.Visible = PlayerFish.CurrentControlScheme == PlayerFish.ControlScheme.Custom;
+	}
+
+	private void UpdateCustomButtonLabels()
+	{
+		if (customButtons.Count == 0)
+			return;
+
+		customButtons[PlayerFish.CustomMoveUp].Text =
+			$"Hoch: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveUp)}";
+		customButtons[PlayerFish.CustomMoveDown].Text =
+			$"Runter: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveDown)}";
+		customButtons[PlayerFish.CustomMoveLeft].Text =
+			$"Links: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveLeft)}";
+		customButtons[PlayerFish.CustomMoveRight].Text =
+			$"Rechts: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveRight)}";
+		customButtons[PlayerFish.CustomBoost].Text =
+			$"Boost: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomBoost)}";
+	}
+
+	private void ResetCustomBindings()
+	{
+		SetKey(PlayerFish.CustomMoveUp, Key.W);
+		SetKey(PlayerFish.CustomMoveDown, Key.S);
+		SetKey(PlayerFish.CustomMoveLeft, Key.A);
+		SetKey(PlayerFish.CustomMoveRight, Key.D);
+		SetKey(PlayerFish.CustomBoost, Key.Space);
+		PlayerFish.SaveControlSettings();
+		UpdateCustomButtonLabels();
+		UpdateStatus("Standard-Tasten wiederhergestellt");
+	}
+
+	private void SetKey(string action, Key key)
+	{
+		InputEventKey keyEvent = new InputEventKey();
+		keyEvent.PhysicalKeycode = key;
+		keyEvent.Keycode = key;
+		PlayerFish.SetCustomInput(action, keyEvent);
+	}
+
+	private void FinishCapture(string message)
+	{
+		pendingCustomAction = "";
+		captureLabel.Text = "";
+		UpdateCustomButtonLabels();
+		UpdateStatus(message);
+	}
+
+	private void CancelCapture()
+	{
+		pendingCustomAction = "";
+		captureLabel.Text = "";
+		UpdateStatus("Abgebrochen");
+	}
+
+	private void UpdateStatus(string text)
+	{
+		if (statusLabel != null)
+			statusLabel.Text = $"> {text}";
+	}
+
+	private bool IsEscapeKey(InputEventKey keyEvent)
+	{
+		return keyEvent.PhysicalKeycode == Key.Escape ||
+			keyEvent.Keycode == Key.Escape;
+	}
+
+	private void GoBack()
+	{
+		SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
+	}
+}

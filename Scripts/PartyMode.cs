@@ -211,14 +211,9 @@ public partial class PartyMode : Control
 		layer.Layer = -20;
 		viewport.AddChild(layer);
 
-		VideoStreamPlayer video = new VideoStreamPlayer();
-		video.Stream = ResourceLoader.Load<VideoStream>("res://Assets/underwater.ogv");
-		video.SpeedScale = 2.57f;
-		video.Autoplay = true;
-		video.Expand = true;
-		video.Loop = true;
-		video.SetAnchorsPreset(LayoutPreset.FullRect);
-		layer.AddChild(video);
+		OceanMapBackground background = new OceanMapBackground();
+		background.ConfigureForScreen();
+		layer.AddChild(background);
 
 		ColorRect tint = new ColorRect();
 		tint.Color = new Color(0.01f, 0.06f, 0.09f, 0.2f);

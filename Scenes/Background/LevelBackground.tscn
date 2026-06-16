@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://d04l5c6ny7fba"]
+
+[ext_resource type="Script" path="res://Scripts/Background/LevelBackground.cs" id="1_levelbg"]
+
+[node name="LevelBackground" type="Node2D"]
+script = ExtResource("1_levelbg")

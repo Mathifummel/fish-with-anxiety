@@ -83,6 +83,11 @@ public partial class ScoreManager : Node
 		SaveTotalCoins();
 	}
 
+	public void AddBonusScore(int scoreValue)
+	{
+		BonusScore += scoreValue;
+	}
+
 	public void StartScoring()
 	{
 		IsRunning = true;

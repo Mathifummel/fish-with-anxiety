@@ -10,7 +10,7 @@ public partial class MenuChaseBackdrop : Node2D
 	private readonly float[] bubblePhase = new float[32];
 	private readonly RandomNumberGenerator rng = new RandomNumberGenerator();
 
-	private VideoStreamPlayer backgroundVideo;
+	private OceanMapBackground backgroundMap;
 	private Sprite2D playerFish;
 	private Texture2D[] playerFrames;
 	private Texture2D[][] enemyFrames;
@@ -30,7 +30,6 @@ public partial class MenuChaseBackdrop : Node2D
 		float dt = (float)delta;
 		time += dt;
 
-		AnimateBackground();
 		AnimateFish();
 		AnimateBubbles();
 	}
@@ -41,14 +40,9 @@ public partial class MenuChaseBackdrop : Node2D
 		layer.Layer = -20;
 		AddChild(layer);
 
-		backgroundVideo = new VideoStreamPlayer();
-		backgroundVideo.Stream = ResourceLoader.Load<VideoStream>("res://Assets/underwater.ogv");
-		backgroundVideo.SpeedScale = 2.57f;
-		backgroundVideo.Autoplay = true;
-		backgroundVideo.Expand = true;
-		backgroundVideo.Loop = true;
-		backgroundVideo.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		layer.AddChild(backgroundVideo);
+		backgroundMap = new OceanMapBackground();
+		backgroundMap.ConfigureForScreen();
+		layer.AddChild(backgroundMap);
 
 		ColorRect tint = new ColorRect();
 		tint.Color = new Color(0.02f, 0.08f, 0.12f, 0.16f);
@@ -140,21 +134,6 @@ public partial class MenuChaseBackdrop : Node2D
 		}
 
 		return ImageTexture.CreateFromImage(image);
-	}
-
-	private void AnimateBackground()
-	{
-		if (backgroundVideo == null)
-			return;
-
-		float driftX = Mathf.Sin(time * 0.11f) * 24f;
-		float driftY = Mathf.Cos(time * 0.09f) * 18f;
-		float zoom = 1.07f + Mathf.Sin(time * 0.07f) * 0.012f;
-		backgroundVideo.OffsetLeft = -64f + driftX;
-		backgroundVideo.OffsetTop = -48f + driftY;
-		backgroundVideo.OffsetRight = 64f + driftX;
-		backgroundVideo.OffsetBottom = 48f + driftY;
-		backgroundVideo.Scale = new Vector2(zoom, zoom);
 	}
 
 	private void AnimateFish()

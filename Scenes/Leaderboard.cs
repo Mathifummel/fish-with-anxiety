@@ -7,8 +7,7 @@ public partial class Leaderboard : Control
 
 	private VBoxContainer RowsContainer;
 	private Label SummaryLabel;
-	private VideoStreamPlayer backgroundVideo;
-	private float visualTime = 0f;
+	private OceanMapBackground backgroundMap;
 
 	public override void _Ready()
 	{
@@ -27,17 +26,11 @@ public partial class Leaderboard : Control
 		}
 	}
 
-	public override void _Process(double delta)
-	{
-		visualTime += (float)delta;
-		AnimateBackground();
-	}
-
 	private void BuildLayout()
 	{
 		SetAnchorsPreset(LayoutPreset.FullRect);
 
-		AddVideoBackground();
+		AddMapBackground();
 		AddTintOverlay();
 
 		MarginContainer pageMargin = new MarginContainer();
@@ -56,7 +49,7 @@ public partial class Leaderboard : Control
 		pageMargin.AddChild(page);
 
 		TextureRect logo = new TextureRect();
-		logo.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Logo.png");
+		logo.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Spiellogo.png");
 		logo.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
 		logo.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
 		logo.CustomMinimumSize = new Vector2(420, 72);
@@ -126,33 +119,12 @@ public partial class Leaderboard : Control
 		buttons.AddChild(playButton);
 	}
 
-	private void AddVideoBackground()
+	private void AddMapBackground()
 	{
-		backgroundVideo = new VideoStreamPlayer();
-		backgroundVideo.Stream = ResourceLoader.Load<VideoStream>("res://Assets/underwater.ogv");
-		backgroundVideo.SpeedScale = 2.57f;
-		backgroundVideo.Autoplay = true;
-		backgroundVideo.Expand = true;
-		backgroundVideo.Loop = true;
-		backgroundVideo.SetAnchorsPreset(LayoutPreset.FullRect);
-		backgroundVideo.PivotOffset = GetViewportRect().Size * 0.5f;
-		AddChild(backgroundVideo);
-	}
-
-	private void AnimateBackground()
-	{
-		if (backgroundVideo == null)
-			return;
-
-		float driftX = Mathf.Sin(visualTime * 0.11f) * 24f;
-		float driftY = Mathf.Cos(visualTime * 0.09f) * 16f;
-		float zoom = 1.055f + Mathf.Sin(visualTime * 0.075f) * 0.018f;
-
-		backgroundVideo.OffsetLeft = -42f + driftX;
-		backgroundVideo.OffsetTop = -32f + driftY;
-		backgroundVideo.OffsetRight = 42f + driftX;
-		backgroundVideo.OffsetBottom = 32f + driftY;
-		backgroundVideo.Scale = new Vector2(zoom, zoom);
+		backgroundMap = new OceanMapBackground();
+		backgroundMap.ConfigureForScreen();
+		AddChild(backgroundMap);
+		MoveChild(backgroundMap, 0);
 	}
 
 	private void AddTintOverlay()

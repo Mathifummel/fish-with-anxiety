@@ -12,12 +12,11 @@ public partial class PartySetup : Control
 	private const int MinRounds = 3;
 	private const int MaxRounds = 10;
 
-	private VideoStreamPlayer backgroundVideo;
+	private OceanMapBackground backgroundMap;
 	private VBoxContainer content;
 	private Label titleLabel;
 	private Label infoLabel;
 	private Label roundsLabel;
-	private float visualTime = 0f;
 	private SetupStep step = SetupStep.Mode;
 	private bool singleMiniGameSelected = false;
 
@@ -28,20 +27,6 @@ public partial class PartySetup : Control
 		BuildPanel();
 		ShowModeStep();
 		SceneTransition.FadeIn(GetTree(), 0.24f);
-	}
-
-	public override void _Process(double delta)
-	{
-		visualTime += (float)delta;
-		if (backgroundVideo == null)
-			return;
-
-		float driftX = Mathf.Sin(visualTime * 0.1f) * 18f;
-		float driftY = Mathf.Cos(visualTime * 0.08f) * 12f;
-		backgroundVideo.OffsetLeft = -44f + driftX;
-		backgroundVideo.OffsetTop = -34f + driftY;
-		backgroundVideo.OffsetRight = 44f + driftX;
-		backgroundVideo.OffsetBottom = 34f + driftY;
 	}
 
 	public override void _UnhandledInput(InputEvent inputEvent)
@@ -63,14 +48,10 @@ public partial class PartySetup : Control
 
 	private void BuildBackground()
 	{
-		backgroundVideo = new VideoStreamPlayer();
-		backgroundVideo.Stream = ResourceLoader.Load<VideoStream>("res://Assets/underwater.ogv");
-		backgroundVideo.SpeedScale = 2.57f;
-		backgroundVideo.Autoplay = true;
-		backgroundVideo.Expand = true;
-		backgroundVideo.Loop = true;
-		backgroundVideo.SetAnchorsPreset(LayoutPreset.FullRect);
-		AddChild(backgroundVideo);
+		backgroundMap = new OceanMapBackground();
+		backgroundMap.ConfigureForScreen();
+		AddChild(backgroundMap);
+		MoveChild(backgroundMap, 0);
 
 		ColorRect tint = new ColorRect();
 		tint.Color = new Color(0.72f, 0.94f, 1f, 0.16f);

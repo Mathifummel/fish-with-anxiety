@@ -81,6 +81,23 @@ public partial class Main : Node2D
 	[Export] public float DirectionalEnemySpawnDistance = 980f;
 	[Export] public float DirectionalEnemySpawnSpread = 380f;
 	[Export] public float CrossingFishChance = 0.28f;
+	[Export] public int MinCrossingFishLevel = 2;
+	[Export] public float CrossingInterval = 15f;
+	[Export] public float LevelTwoCrossingInterval = 26f;
+	[Export] public float CrossingIntervalJitter = 2.2f;
+	[Export] public float FirstCrossingDelay = 5.5f;
+	[Export] public float LevelTwoFirstCrossingDelay = 12f;
+	[Export] public float CrossingWarningDuration = 0.82f;
+	[Export] public float CrossingWarningCooldown = 1.55f;
+	[Export] public int MaxPendingCrossingFish = 3;
+	[Export] public int MaxCrossingWaveCount = 3;
+	[Export] public float CrossingNearbyEnemyRadius = 560f;
+	[Export] public int CrossingComfortEnemyCount = 2;
+	[Export] public float CrossingLaneMinDistance = 300f;
+	[Export] public float CrossingLaneMaxDistance = 620f;
+	[Export] public float CrossingSideMinDistance = 760f;
+	[Export] public float CrossingSideMaxDistance = 1040f;
+	[Export] public float CrossingSpeedMultiplier = 1.24f;
 	[Export] public float SwarmSpawnDistance = 920f;
 	[Export] public float SwarmSpacing = 126f;
 	[Export] public float SwarmSpawnDelay = 2.8f;
@@ -98,7 +115,10 @@ public partial class Main : Node2D
 	[Export] public int MaxItemsInWorld = 1;
 	[Export] public float ItemSpawnChance = 0.07f;
 	[Export] public float MinItemSpacing = 920f;
-	[Export] public float AlcoholDuration = 7f;
+	[Export] public float AlcoholDuration = 8f;
+	[Export] public int AlcoholFishBonusScore = 100;
+	[Export] public float AlcoholFishTimeBonus = 2f;
+	[Export] public int AlcoholFishTimeBonusLimit = 6;
 	[Export] public float NpcFleeSpeedMultiplier = 1.35f;
 	[Export] public float ChorusTeleportDistance = 760f;
 	[Export] public float ChorusMinEnemyDistance = 420f;
@@ -118,7 +138,7 @@ public partial class Main : Node2D
 	private Label ItemEffectLabel;
 	private TextureRect ItemHintArrow;
 	private Label ItemHintText;
-	private Button PauseButton;
+	private BaseButton PauseButton;
 	private ColorRect PauseBackdrop;
 	private Panel PausePanel;
 	private VBoxContainer PauseCustomBindings;
@@ -126,6 +146,7 @@ public partial class Main : Node2D
 	private Label PauseStatusLabel;
 	private Button PauseConfirmButton;
 	private float invincibilityTimer = 0f;
+	private int alcoholFishTimeBonuses = 0;
 
 	private float Stress = 0f;
 	private float countdownTimer = 0f;
@@ -142,10 +163,10 @@ public partial class Main : Node2D
 	private float jellyfishSpeedMultiplier = 1f;
 	private int pendingSwarmCount = 0;
 	private float pendingSwarmTimer = 0f;
-	private VideoStreamPlayer backgroundVideo;
-	private float backgroundTime = 0f;
-	private Vector2 backgroundScroll = Vector2.Zero;
-	private Vector2 backgroundScrollVelocity = Vector2.Zero;
+	private float crossingIntervalTimer = 0f;
+	private float crossingWarningCooldownTimer = 0f;
+	private Texture2D crossingWarningTexture;
+	private OceanMapBackground backgroundMap;
 	private bool gameOverTriggered = false;
 	private string pendingPauseCustomAction = "";
 	private float pauseConfirmationTimer = 0f;
@@ -155,6 +176,17 @@ public partial class Main : Node2D
 	private readonly Dictionary<PlayerFish.ControlScheme, Button> pauseModeButtons =
 		new Dictionary<PlayerFish.ControlScheme, Button>();
 	private readonly Dictionary<string, Button> pauseCustomButtons = new Dictionary<string, Button>();
+	private readonly List<CrossingWarning> crossingWarnings = new List<CrossingWarning>();
+
+	private sealed class CrossingWarning
+	{
+		public Sprite2D Marker;
+		public Vector2 SpawnPosition;
+		public Vector2 Direction;
+		public float Lifetime;
+		public float Timer;
+		public float SpeedBoost;
+	}
 
 	public override void _Ready()
 	{
@@ -169,6 +201,8 @@ public partial class Main : Node2D
 		CreateItemEffectLabel();
 		CreateItemDirectionHint();
 		CreatePauseMenu();
+		crossingWarningTexture =
+			ResourceLoader.Load<Texture2D>("res://Assets/exclamation_spritesheet_01.png");
 
 		if (MenuPreviewMode)
 		{
@@ -196,7 +230,10 @@ public partial class Main : Node2D
 		gamePaused = false;
 		currentLevel = 1;
 		Stress = 0f;
+		invincibilityTimer = 0f;
+		alcoholFishTimeBonuses = 0;
 		itemHintTimer = 0f;
+		ClearCrossingWarnings();
 		ResetItemHintCooldown();
 		HideItemDirectionHint();
 		HidePauseMenu();
@@ -215,6 +252,8 @@ public partial class Main : Node2D
 		gameStarted = true;
 		currentLevel = sm.SavedLevel;
 		Stress = Mathf.Clamp(sm.SavedStress, 0f, 85f);
+		invincibilityTimer = 0f;
+		alcoholFishTimeBonuses = 0;
 		Player.CurrentStress = Stress;
 		StressBar.Value = Stress;
 		Player.GlobalPosition = sm.SavedPlayerPosition;
@@ -231,6 +270,7 @@ public partial class Main : Node2D
 		GameUi.RumbleConnectedJoypads(0.22f, 0.58f, 0.18f);
 
 		ApplyLevelSettings(currentLevel, false);
+		ResetCrossingIntervalTimer(true);
 		SpawnInitialWorld();
 		ShowLevelNotice("Wiederbelebt!");
 		UpdateItemEffectLabel();
@@ -287,8 +327,6 @@ public partial class Main : Node2D
 	public override void _Process(double delta)
 	{
 		float dt = (float)delta;
-		backgroundTime += dt;
-		AnimateBackground(dt);
 
 		if (gamePaused)
 		{
@@ -324,6 +362,8 @@ public partial class Main : Node2D
 		CoinLabel.Text = $"Münzen: {sm.CoinsThisRun}";
 		UpdateDifficulty(sm.CurrentScore);
 		UpdatePendingSwarm(dt);
+		UpdateTimedCrossingFish(dt);
+		UpdateCrossingWarnings(dt);
 		UpdateLevelNotice(dt);
 		UpdateItemEffects(dt);
 		UpdateItemDirectionHint(dt);
@@ -332,72 +372,10 @@ public partial class Main : Node2D
 
 	private void CreateBackgroundLayer()
 	{
-		CanvasLayer backgroundLayer = new CanvasLayer();
-		backgroundLayer.Layer = -20;
-		AddChild(backgroundLayer);
-
-		backgroundVideo = new VideoStreamPlayer();
-		backgroundVideo.Stream = ResourceLoader.Load<VideoStream>("res://Assets/underwater.ogv");
-		backgroundVideo.SpeedScale = 2.57f;
-		backgroundVideo.Autoplay = true;
-		backgroundVideo.Expand = true;
-		backgroundVideo.Loop = true;
-		backgroundVideo.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		backgroundVideo.PivotOffset = GetViewportRect().Size * 0.5f;
-		backgroundLayer.AddChild(backgroundVideo);
-
-		ColorRect overlay = new ColorRect();
-		overlay.Color = new Color(0.01f, 0.06f, 0.09f, 0.18f);
-		overlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		backgroundLayer.AddChild(overlay);
-	}
-
-	private void AnimateBackground(float dt)
-	{
-		if (backgroundVideo == null)
-			return;
-
-		Vector2 playerVelocity = Player != null ? Player.Velocity : Vector2.Zero;
-		float speed = playerVelocity.Length();
-		float playerBaseSpeed = Player != null ? Player.Speed : 200f;
-		float speedFactor = Mathf.Clamp(speed / Mathf.Max(playerBaseSpeed, 1f), 0f, 2.3f);
-		Vector2 desiredScrollVelocity = Vector2.Zero;
-
-		if (speed > 8f)
-		{
-			float parallaxStrength = Player.IsBoosting ? 0.105f : 0.062f;
-			desiredScrollVelocity = -playerVelocity * parallaxStrength;
-		}
-
-		backgroundScrollVelocity = backgroundScrollVelocity.Lerp(
-			desiredScrollVelocity,
-			Mathf.Clamp(dt * 3.2f, 0f, 1f)
-		);
-
-		backgroundScroll += backgroundScrollVelocity * dt;
-		backgroundScroll.X = WrapAroundCenter(backgroundScroll.X, 92f);
-		backgroundScroll.Y = WrapAroundCenter(backgroundScroll.Y, 68f);
-
-		float driftX = Mathf.Sin(backgroundTime * 0.12f) * 18f;
-		float driftY = Mathf.Cos(backgroundTime * 0.1f) * 12f;
-		float zoom = 1.085f + speedFactor * 0.018f + Mathf.Sin(backgroundTime * 0.07f) * 0.012f;
-
-		backgroundVideo.OffsetLeft = -64f + driftX + backgroundScroll.X;
-		backgroundVideo.OffsetTop = -48f + driftY + backgroundScroll.Y;
-		backgroundVideo.OffsetRight = 64f + driftX + backgroundScroll.X;
-		backgroundVideo.OffsetBottom = 48f + driftY + backgroundScroll.Y;
-		backgroundVideo.Scale = new Vector2(zoom, zoom);
-	}
-
-	private float WrapAroundCenter(float value, float limit)
-	{
-		if (value > limit)
-			return -limit;
-
-		if (value < -limit)
-			return limit;
-
-		return value;
+		backgroundMap = new OceanMapBackground();
+		backgroundMap.ConfigureForWorld(Player);
+		AddChild(backgroundMap);
+		MoveChild(backgroundMap, 0);
 	}
 
 	private void SetupUi()
@@ -457,17 +435,30 @@ public partial class Main : Node2D
 	{
 		CanvasLayer ui = GetNode<CanvasLayer>("UI");
 
-		PauseButton = new Button();
-		PauseButton.Text = "Pause";
-		PauseButton.CustomMinimumSize = new Vector2(96, 38);
-		PauseButton.SetAnchorsPreset(Control.LayoutPreset.TopRight);
-		PauseButton.OffsetLeft = -344;
-		PauseButton.OffsetTop = 18;
-		PauseButton.OffsetRight = -242;
-		PauseButton.OffsetBottom = 58;
+		TextureButton pauseButton = new TextureButton();
+		Texture2D pauseTexture = ResourceLoader.Load<Texture2D>("res://Assets/Pausenknopf.png");
+		pauseButton.TextureNormal = pauseTexture;
+		pauseButton.TextureHover = pauseTexture;
+		pauseButton.TexturePressed = pauseTexture;
+		pauseButton.IgnoreTextureSize = true;
+		pauseButton.StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered;
+		pauseButton.TooltipText = "Pause";
+		pauseButton.Modulate = new Color(0.94f, 1f, 1f, 0.9f);
+		pauseButton.SelfModulate = new Color(1f, 1f, 1f, 1f);
+		PauseButton = pauseButton;
+		PauseButton.CustomMinimumSize = new Vector2(52, 44);
+		PauseButton.AnchorLeft = 0.5f;
+		PauseButton.AnchorTop = 0f;
+		PauseButton.AnchorRight = 0.5f;
+		PauseButton.AnchorBottom = 0f;
+		PauseButton.OffsetLeft = -27;
+		PauseButton.OffsetTop = 17;
+		PauseButton.OffsetRight = 27;
+		PauseButton.OffsetBottom = 61;
 		PauseButton.FocusMode = Control.FocusModeEnum.None;
-		ApplyPauseButtonStyle(PauseButton, false);
 		PauseButton.Pressed += () => SetGameplayPaused(true);
+		PauseButton.MouseEntered += () => PauseButton.Modulate = new Color(1f, 1f, 1f, 1f);
+		PauseButton.MouseExited += () => PauseButton.Modulate = new Color(0.94f, 1f, 1f, 0.9f);
 		PauseButton.Hide();
 		ui.AddChild(PauseButton);
 
@@ -914,9 +905,8 @@ public partial class Main : Node2D
 
 	void SpawnNPC()
 	{
-		if (gameStarted && currentLevel >= 2 && GD.Randf() < GetCrossingFishChance())
+		if (ShouldScheduleCrossingNPC() && TryScheduleCrossingWave(false))
 		{
-			SpawnCrossingNPC();
 			return;
 		}
 
@@ -931,30 +921,254 @@ public partial class Main : Node2D
 		NPCContainer.AddChild(npc);
 	}
 
-	private void SpawnCrossingNPC()
+	private bool ShouldScheduleCrossingNPC()
 	{
-		NPCFish npc = NPCFishScene.Instantiate<NPCFish>();
-		ConfigureNPCFish(npc);
+		return
+			gameStarted &&
+			!MenuPreviewMode &&
+			currentLevel >= MinCrossingFishLevel &&
+			crossingWarningCooldownTimer <= 0f &&
+			crossingWarnings.Count < MaxPendingCrossingFish &&
+			GD.Randf() < GetCrossingFishChance();
+	}
+
+	private bool TryScheduleCrossingNPC()
+	{
 		Vector2 forward = GetPlayerMoveDirection();
 		Vector2 side = new Vector2(-forward.Y, forward.X);
 		float sideSign = GD.Randf() < 0.5f ? -1f : 1f;
 		Vector2 laneCenter =
 			Player.Position +
-			forward * (float)GD.RandRange(260f, 540f);
+			forward * (float)GD.RandRange(CrossingLaneMinDistance, CrossingLaneMaxDistance);
 
-		npc.Position =
+		Vector2 spawnPosition =
 			laneCenter +
-			side * sideSign * (float)GD.RandRange(680f, 920f);
+			side * sideSign * (float)GD.RandRange(CrossingSideMinDistance, CrossingSideMaxDistance);
+		spawnPosition = ClampToWaterBounds(spawnPosition, 72f);
+		Vector2 crossingDirection =
+			(-side * sideSign + forward * (float)GD.RandRange(-0.18f, 0.34f)).Normalized();
 
+		if (crossingDirection == Vector2.Zero)
+			return false;
+
+		CrossingWarning warning = new CrossingWarning
+		{
+			Marker = CreateCrossingWarningMarker(spawnPosition),
+			SpawnPosition = spawnPosition,
+			Direction = crossingDirection,
+			Lifetime = (float)GD.RandRange(4.4f, 6.5f),
+			Timer = CrossingWarningDuration,
+			SpeedBoost = GetCrossingEnemySpeedBoost()
+		};
+
+		crossingWarnings.Add(warning);
+		crossingWarningCooldownTimer = CrossingWarningCooldown;
+		AddChild(warning.Marker);
+		return true;
+	}
+
+	private Sprite2D CreateCrossingWarningMarker(Vector2 spawnPosition)
+	{
+		Sprite2D marker = new Sprite2D();
+		marker.Texture = crossingWarningTexture;
+		marker.Hframes = 8;
+		marker.Frame = 6;
+		marker.Centered = true;
+		marker.Position = GetCrossingWarningPosition(spawnPosition);
+		marker.Scale = new Vector2(2.45f, 2.45f);
+		marker.ZIndex = 120;
+		marker.Modulate = new Color(1f, 1f, 1f, 0.95f);
+		return marker;
+	}
+
+	private Vector2 GetCrossingWarningPosition(Vector2 spawnPosition)
+	{
+		Vector2 fromPlayer = spawnPosition - Player.Position;
+
+		if (fromPlayer.LengthSquared() < 1f)
+			fromPlayer = Vector2.Right;
+
+		Vector2 direction = fromPlayer.Normalized();
+		Vector2 halfViewport = GetViewportRect().Size * 0.5f;
+		Vector2 edge = new Vector2(
+			Mathf.Max(halfViewport.X - 58f, 160f),
+			Mathf.Max(halfViewport.Y - 58f, 120f)
+		);
+
+		float xRatio = Mathf.Abs(direction.X) > 0.001f
+			? edge.X / Mathf.Abs(direction.X)
+			: float.MaxValue;
+		float yRatio = Mathf.Abs(direction.Y) > 0.001f
+			? edge.Y / Mathf.Abs(direction.Y)
+			: float.MaxValue;
+
+		return Player.Position + direction * Mathf.Min(xRatio, yRatio);
+	}
+
+	private void SpawnCrossingNPC(CrossingWarning warning)
+	{
+		NPCFish npc = NPCFishScene.Instantiate<NPCFish>();
+		ConfigureNPCFish(npc);
+		npc.Position = warning.SpawnPosition;
 		npc.Player = Player;
 		npc.Mode = NPCFish.MovementMode.Crossing;
-		npc.CrossingDirection =
-			(-side * sideSign + forward * (float)GD.RandRange(-0.15f, 0.35f)).Normalized();
-		npc.CrossingLifetime = (float)GD.RandRange(4.2f, 6.2f);
-		npc.Speed *= npcSpeedMultiplier * GetCrossingEnemySpeedBoost();
+		npc.CrossingDirection = warning.Direction;
+		npc.CrossingLifetime = warning.Lifetime;
+		npc.Speed *= npcSpeedMultiplier * warning.SpeedBoost * CrossingSpeedMultiplier;
 		npc.SetPhysicsProcess(gameStarted);
 
 		NPCContainer.AddChild(npc);
+	}
+
+	private void UpdateCrossingWarnings(float dt)
+	{
+		if (crossingWarningCooldownTimer > 0f)
+			crossingWarningCooldownTimer -= dt;
+
+		for (int i = crossingWarnings.Count - 1; i >= 0; i--)
+		{
+			CrossingWarning warning = crossingWarnings[i];
+
+			warning.Timer -= dt;
+
+			if (warning.Marker != null && !warning.Marker.IsQueuedForDeletion())
+			{
+				float progress = 1f - Mathf.Clamp(warning.Timer / Mathf.Max(CrossingWarningDuration, 0.01f), 0f, 1f);
+				float pulse = Mathf.Sin(progress * Mathf.Tau * 2.5f);
+				float scale = 2.3f + pulse * 0.28f;
+
+				warning.Marker.Position = GetCrossingWarningPosition(warning.SpawnPosition);
+				warning.Marker.Scale = new Vector2(scale, scale);
+				warning.Marker.Frame = Mathf.PosMod((int)(progress * 16f), 8);
+				warning.Marker.Modulate = new Color(1f, 1f, 1f, 0.7f + Mathf.Abs(pulse) * 0.28f);
+			}
+
+			if (warning.Timer > 0f)
+				continue;
+
+			if (warning.Marker != null && !warning.Marker.IsQueuedForDeletion())
+				warning.Marker.QueueFree();
+
+			crossingWarnings.RemoveAt(i);
+
+			if (gameStarted && !gamePaused && !gameOverTriggered)
+				SpawnCrossingNPC(warning);
+		}
+	}
+
+	private void UpdateTimedCrossingFish(float dt)
+	{
+		if (currentLevel < MinCrossingFishLevel)
+		{
+			crossingIntervalTimer = 0f;
+			return;
+		}
+
+		if (crossingIntervalTimer <= 0f)
+			ResetCrossingIntervalTimer(true);
+
+		crossingIntervalTimer -= dt;
+
+		if (crossingIntervalTimer > 0f ||
+			crossingWarningCooldownTimer > 0f ||
+			crossingWarnings.Count >= MaxPendingCrossingFish)
+		{
+			return;
+		}
+
+		if (TryScheduleCrossingWave(true))
+			ResetCrossingIntervalTimer(false);
+		else
+			crossingIntervalTimer = 1.25f;
+	}
+
+	private bool TryScheduleCrossingWave(bool timedWave)
+	{
+		int availableSlots = MaxPendingCrossingFish - crossingWarnings.Count;
+
+		if (availableSlots <= 0)
+			return false;
+
+		int waveCount = Mathf.Min(GetCrossingWaveCount(timedWave), availableSlots);
+		bool scheduledAny = false;
+
+		for (int i = 0; i < waveCount; i++)
+			scheduledAny = TryScheduleCrossingNPC() || scheduledAny;
+
+		return scheduledAny;
+	}
+
+	private int GetCrossingWaveCount(bool timedWave)
+	{
+		int maxCount = Mathf.Max(MaxCrossingWaveCount, 1);
+
+		if (currentLevel <= 2)
+			return timedWave && GD.Randf() < 0.08f ? Mathf.Min(2, maxCount) : 1;
+
+		float doubleChance = currentLevel switch
+		{
+			3 => 0.28f,
+			4 => 0.42f,
+			_ => 0.55f,
+		};
+		float tripleChance = currentLevel switch
+		{
+			>= 5 => 0.18f,
+			4 => 0.08f,
+			_ => 0.03f,
+		};
+
+		if (!timedWave)
+		{
+			doubleChance *= 0.45f;
+			tripleChance *= 0.35f;
+		}
+
+		if (maxCount >= 3 && GD.Randf() < tripleChance)
+			return 3;
+
+		if (maxCount >= 2 && GD.Randf() < doubleChance)
+			return 2;
+
+		return 1;
+	}
+
+	private void ResetCrossingIntervalTimer(bool firstDelay)
+	{
+		if (currentLevel < MinCrossingFishLevel)
+		{
+			crossingIntervalTimer = 0f;
+			return;
+		}
+
+		float interval = currentLevel <= 2 ? LevelTwoCrossingInterval : CrossingInterval;
+
+		if (firstDelay)
+			interval = currentLevel <= 2 ? LevelTwoFirstCrossingDelay : FirstCrossingDelay;
+
+		int nearbyEnemies = CountNearbyNPCs(CrossingNearbyEnemyRadius);
+		float comfortCount = Mathf.Max(CrossingComfortEnemyCount, 1);
+		float calmness = Mathf.Clamp((comfortCount - nearbyEnemies) / comfortCount, 0f, 1f);
+		float pressureMultiplier = Mathf.Lerp(1.05f, 0.78f, calmness);
+		float jitter = firstDelay ? 1.2f : CrossingIntervalJitter;
+
+		crossingIntervalTimer = Mathf.Max(
+			3.2f,
+			interval * pressureMultiplier + (float)GD.RandRange(-jitter, jitter)
+		);
+	}
+
+	private void ClearCrossingWarnings()
+	{
+		foreach (CrossingWarning warning in crossingWarnings)
+		{
+			if (warning.Marker != null && !warning.Marker.IsQueuedForDeletion())
+				warning.Marker.QueueFree();
+		}
+
+		crossingWarnings.Clear();
+		crossingIntervalTimer = 0f;
+		crossingWarningCooldownTimer = 0f;
 	}
 
 	// =====================================
@@ -1201,7 +1415,8 @@ public partial class Main : Node2D
 
 	private void ApplyAlcoholEffect()
 	{
-		invincibilityTimer = AlcoholDuration;
+		invincibilityTimer = Mathf.Max(invincibilityTimer, AlcoholDuration);
+		alcoholFishTimeBonuses = 0;
 		Player.SetInvincible(true);
 		Stress = 0f;
 		Player.CurrentStress = 0f;
@@ -1258,13 +1473,13 @@ public partial class Main : Node2D
 				continue;
 
 			Vector2 candidate =
-				Player.Position + dir.Normalized() * ChorusTeleportDistance;
+				ClampToWaterBounds(Player.Position + dir.Normalized() * ChorusTeleportDistance);
 
 			if (IsChorusTeleportSafe(candidate))
 				return candidate;
 		}
 
-		return Player.Position + awayDirection.Normalized() * ChorusTeleportDistance * 0.7f;
+		return ClampToWaterBounds(Player.Position + awayDirection.Normalized() * ChorusTeleportDistance * 0.7f);
 	}
 
 	private bool IsChorusTeleportSafe(Vector2 position)
@@ -1290,6 +1505,7 @@ public partial class Main : Node2D
 			if (invincibilityTimer <= 0f)
 			{
 				invincibilityTimer = 0f;
+				alcoholFishTimeBonuses = 0;
 				Player.SetInvincible(false);
 			}
 		}
@@ -1476,7 +1692,7 @@ public partial class Main : Node2D
 
 	private Vector2 GetSafeSpawnPosition(bool preferChaseAngle = false)
 	{
-		Vector2 fallback = Player.Position + Vector2.Right * MaxSpawnDistance;
+		Vector2 fallback = ClampToWaterBounds(Player.Position + Vector2.Right * MaxSpawnDistance);
 		float bestClearance = -1f;
 
 		for (int i = 0; i < MaxSpawnAttempts; i++)
@@ -1492,7 +1708,7 @@ public partial class Main : Node2D
 			if (clearance > bestClearance)
 			{
 				bestClearance = clearance;
-				fallback = candidate;
+				fallback = ClampToWaterBounds(candidate);
 			}
 		}
 
@@ -1507,8 +1723,10 @@ public partial class Main : Node2D
 		Vector2 forward = GetPlayerMoveDirection();
 		Vector2 side = new Vector2(-forward.Y, forward.X);
 		Vector2 fallback =
-			Player.Position +
-			forward * DirectionalEnemySpawnDistance;
+			ClampToWaterBounds(
+				Player.Position +
+				forward * DirectionalEnemySpawnDistance
+			);
 		float bestClearance = -1f;
 
 		for (int i = 0; i < MaxSpawnAttempts; i++)
@@ -1534,7 +1752,7 @@ public partial class Main : Node2D
 				clearance > bestClearance)
 			{
 				bestClearance = clearance;
-				fallback = candidate;
+				fallback = ClampToWaterBounds(candidate);
 			}
 		}
 
@@ -1553,34 +1771,65 @@ public partial class Main : Node2D
 	{
 		return currentLevel switch
 		{
-			>= 5 => 1.2f,
-			4 => 1.14f,
-			3 => 1.09f,
-			2 => 1.04f,
+			>= 5 => 1.3f,
+			4 => 1.23f,
+			3 => 1.16f,
+			2 => 1.08f,
 			_ => 1f,
 		};
 	}
 
 	private float GetCrossingFishChance()
 	{
-		return currentLevel switch
+		if (currentLevel < MinCrossingFishLevel)
+			return 0f;
+
+		float baseChance = currentLevel switch
 		{
-			2 => CrossingFishChance * 0.36f,
+			2 => CrossingFishChance * 0.18f,
 			3 => CrossingFishChance * 0.58f,
 			4 => CrossingFishChance * 0.86f,
 			>= 5 => CrossingFishChance * 1.12f,
 			_ => 0f,
 		};
+
+		int nearbyEnemies = CountNearbyNPCs(CrossingNearbyEnemyRadius);
+		float comfortCount = Mathf.Max(CrossingComfortEnemyCount, 1);
+		float calmness = Mathf.Clamp((comfortCount - nearbyEnemies) / comfortCount, 0f, 1f);
+		float pressureMultiplier = Mathf.Lerp(0.72f, 1.75f, calmness);
+
+		return Mathf.Clamp(baseChance * pressureMultiplier, 0f, 0.72f);
+	}
+
+	private int CountNearbyNPCs(float radius)
+	{
+		if (NPCContainer == null || Player == null)
+			return 0;
+
+		int count = 0;
+		float radiusSquared = radius * radius;
+
+		foreach (Node node in NPCContainer.GetChildren())
+		{
+			if (node is NPCFish npc &&
+				!npc.IsQueuedForDeletion() &&
+				npc.Position.DistanceSquaredTo(Player.Position) <= radiusSquared)
+			{
+				count++;
+			}
+		}
+
+		return count;
 	}
 
 	private float GetCrossingEnemySpeedBoost()
 	{
 		return currentLevel switch
 		{
-			2 => 1.24f,
-			3 => 1.38f,
-			4 => 1.55f,
-			>= 5 => 1.7f,
+			2 => 1.42f,
+			3 => 1.82f,
+			4 => 2.02f,
+			>= 5 => 2.18f,
 			_ => 1f,
 		};
 	}
@@ -1603,6 +1852,9 @@ public partial class Main : Node2D
 
 	private bool IsSpawnPositionSafe(Vector2 candidate)
 	{
+		if (!IsInWaterBounds(candidate))
+			return false;
+
 		if (candidate.DistanceTo(Player.Position) < MinSpawnDistance)
 			return false;
 
@@ -1613,6 +1865,22 @@ public partial class Main : Node2D
 		}
 
 		return true;
+	}
+
+	private bool IsInWaterBounds(Vector2 position, float margin = 70f)
+	{
+		return position.Y >= OceanMapBackground.WorldSkyBottomY + margin &&
+			position.Y <= OceanMapBackground.WorldSandTopY - margin;
+	}
+
+	private Vector2 ClampToWaterBounds(Vector2 position, float margin = 82f)
+	{
+		position.Y = Mathf.Clamp(
+			position.Y,
+			OceanMapBackground.WorldSkyBottomY + margin,
+			OceanMapBackground.WorldSandTopY - margin
+		);
+		return position;
 	}
 
 	private float GetSpawnClearance(Vector2 candidate)
@@ -1753,58 +2021,77 @@ public partial class Main : Node2D
 				TargetJellyfishCount = 0;
 				TargetObstacleCount = 10;
 				MinSpawnSpacing = 170f;
-				SpawnCheckInterval = 0.35f;
-				ApplySpeedMultiplier(1f, 1f, 1f);
+				SpawnCheckInterval = 0.32f;
+				SpawnMovementStep = 245f;
+				ApplySpeedMultiplier(1.03f, 1f, 1f);
 				break;
 
 			case 2:
-				TargetNPCCount = 8;
+				TargetNPCCount = 9;
 				TargetPassiveFishCount = 15;
 				TargetJellyfishCount = 2;
-				TargetObstacleCount = 11;
-				MinSpawnSpacing = 185f;
-				SpawnCheckInterval = 0.31f;
-				ApplySpeedMultiplier(1.08f, 1.03f, 1.04f);
+				TargetObstacleCount = 12;
+				MinSpawnSpacing = 178f;
+				SpawnCheckInterval = 0.28f;
+				SpawnMovementStep = 230f;
+				ApplySpeedMultiplier(1.14f, 1.04f, 1.08f);
 				break;
 
 			case 3:
-				TargetNPCCount = 9;
+				TargetNPCCount = 11;
 				TargetPassiveFishCount = 16;
-				TargetJellyfishCount = 3;
-				TargetObstacleCount = 12;
-				MinSpawnSpacing = 205f;
-				SpawnCheckInterval = 0.27f;
-				ApplySpeedMultiplier(1.18f, 1.08f, 1.1f);
+				TargetJellyfishCount = 4;
+				TargetObstacleCount = 13;
+				MinSpawnSpacing = 188f;
+				SpawnCheckInterval = 0.24f;
+				SpawnMovementStep = 215f;
+				ApplySpeedMultiplier(1.28f, 1.08f, 1.16f);
 				break;
 
 			case 4:
-				TargetNPCCount = 11;
+				TargetNPCCount = 13;
 				TargetPassiveFishCount = 18;
-				TargetJellyfishCount = 5;
-				TargetObstacleCount = 13;
-				MinSpawnSpacing = 220f;
-				SpawnCheckInterval = 0.24f;
-				ApplySpeedMultiplier(1.29f, 1.13f, 1.18f);
+				TargetJellyfishCount = 6;
+				TargetObstacleCount = 14;
+				MinSpawnSpacing = 198f;
+				SpawnCheckInterval = 0.21f;
+				SpawnMovementStep = 200f;
+				ApplySpeedMultiplier(1.4f, 1.14f, 1.26f);
 				break;
 
 			default:
-				TargetNPCCount = 13;
+				TargetNPCCount = 15;
 				TargetPassiveFishCount = 19;
-				TargetJellyfishCount = 7;
-				TargetObstacleCount = 14;
-				MinSpawnSpacing = 210f;
-				SpawnCheckInterval = 0.21f;
-				ApplySpeedMultiplier(1.4f, 1.18f, 1.28f);
+				TargetJellyfishCount = 8;
+				TargetObstacleCount = 15;
+				MinSpawnSpacing = 196f;
+				SpawnCheckInterval = 0.19f;
+				SpawnMovementStep = 185f;
+				ApplySpeedMultiplier(1.53f, 1.2f, 1.36f);
 				break;
 		}
+
+		if (level >= MinCrossingFishLevel && crossingIntervalTimer <= 0f)
+			ResetCrossingIntervalTimer(showNotice);
 
 		if (!showNotice)
 			return;
 
 		ShowLevelNotice($"Level {level} erreicht");
+		FillDifficultyTargets();
 
 		if (level >= 3)
 			ScheduleLevelSwarm(level - 1);
+	}
+
+	private void FillDifficultyTargets()
+	{
+		if (!gameStarted || gamePaused || gameOverTriggered)
+			return;
+
+		FillContainer(NPCContainer, TargetNPCCount, SpawnNPC);
+		FillContainer(JellyfishContainer, TargetJellyfishCount, SpawnJellyfish);
+		FillContainer(ObstacleContainer, TargetObstacleCount, SpawnObstacle);
 	}
 
 	private void ScheduleLevelSwarm(int count)
@@ -1972,6 +2259,7 @@ public partial class Main : Node2D
 
 		if (invincible)
 		{
+			HandleAlcoholPassiveFishCollisions();
 			Stress = Mathf.MoveToward(Stress, 0f, 95f * dt);
 			Player.CurrentStress = Stress;
 			StressBar.Value = Stress;
@@ -2101,6 +2389,42 @@ public partial class Main : Node2D
 		UpdateStressBarColor();
 	}
 
+	private void HandleAlcoholPassiveFishCollisions()
+	{
+		if (invincibilityTimer <= 0f ||
+			PassiveFishContainer == null ||
+			Player == null)
+		{
+			return;
+		}
+
+		var sm = GetNode<ScoreManager>("/root/ScoreManager");
+		float playerRadius = Player.CollisionRadius;
+
+		foreach (Node node in PassiveFishContainer.GetChildren())
+		{
+			if (node is not PassiveFish fish || fish.IsQueuedForDeletion())
+				continue;
+
+			float hitRadius = playerRadius + fish.CollisionRadius;
+
+			if (Player.Position.DistanceSquaredTo(fish.Position) > hitRadius * hitRadius)
+				continue;
+
+			sm.AddBonusScore(AlcoholFishBonusScore);
+
+			if (alcoholFishTimeBonuses < AlcoholFishTimeBonusLimit)
+			{
+				alcoholFishTimeBonuses++;
+				invincibilityTimer += AlcoholFishTimeBonus;
+			}
+
+			fish.QueueFree();
+			SpawnPassiveFish();
+			ShowLevelNotice($"+{AlcoholFishBonusScore} Fisch-Bonus");
+		}
+	}
+
 	private void UpdateStressBarColor()
 	{
 		if (Stress < 40)
@@ -2136,7 +2460,9 @@ public partial class Main : Node2D
 		SetContainerPhysics(JellyfishContainer, false);
 
 		invincibilityTimer = 0f;
+		alcoholFishTimeBonuses = 0;
 		HideItemDirectionHint();
+		ClearCrossingWarnings();
 		HidePauseMenu();
 		PauseButton?.Hide();
 
