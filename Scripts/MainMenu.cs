@@ -31,10 +31,9 @@ public partial class MainMenu : Control
 	private const float ShopNoticeDuration = 1.15f;
 	private const float ControllerNoticeDuration = 3.8f;
 
-	private static bool controllerNoticeShownThisRun = false;
 	private readonly List<Button> menuButtons = new List<Button>();
 	private readonly Dictionary<Button, Tween> hoverTweens = new Dictionary<Button, Tween>();
-	private readonly HashSet<int> knownJoypads = new HashSet<int>();
+	private readonly Dictionary<int, string> knownJoypads = new Dictionary<int, string>();
 
 	private SubViewport backgroundViewport;
 	private Button multiplayerButton;
@@ -42,6 +41,7 @@ public partial class MainMenu : Control
 	private TextureRect gameLogo;
 	private Panel controllerNoticePanel;
 	private TextureRect controllerNoticeImage;
+	private Label controllerNoticeTitle;
 	private Label controllerNoticeName;
 	private float multiplayerNoticeTimer = 0f;
 	private float shopNoticeTimer = 0f;
@@ -315,6 +315,7 @@ public partial class MainMenu : Control
 		title.ClipText = true;
 		GameUi.ApplyLabel(title, 17, GameUi.LightText);
 		copy.AddChild(title);
+		controllerNoticeTitle = title;
 
 		controllerNoticeName = new Label();
 		controllerNoticeName.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -372,35 +373,56 @@ public partial class MainMenu : Control
 		{
 			connected.Add(device);
 
-			if (knownJoypads.Contains(device))
+			if (knownJoypads.ContainsKey(device))
 				continue;
 
-			knownJoypads.Add(device);
-
-			if (!controllerNoticeShownThisRun)
-				ShowControllerNotice(device);
+			string joyName = Input.GetJoyName(device) ?? "";
+			knownJoypads[device] = joyName;
+			ShowControllerNotice(joyName, true);
 		}
 
-		knownJoypads.RemoveWhere(device => !connected.Contains(device));
+		List<int> removedDevices = new List<int>();
+
+		foreach (int device in knownJoypads.Keys)
+		{
+			if (!connected.Contains(device))
+				removedDevices.Add(device);
+		}
+
+		foreach (int device in removedDevices)
+		{
+			string joyName = knownJoypads[device];
+			knownJoypads.Remove(device);
+			ShowControllerNotice(joyName, false);
+		}
 	}
 
-	private void ShowControllerNotice(int device)
+	private void ShowControllerNotice(string joyName, bool connected)
 	{
-		if (controllerNoticePanel == null || controllerNoticeShownThisRun)
+		if (controllerNoticePanel == null)
 			return;
 
-		string joyName = Input.GetJoyName(device) ?? "";
-		ControllerInfo info = GetControllerInfo(joyName);
+		if (connected && !GameUi.TryClaimControllerNotice())
+			return;
 
+		if (!connected)
+			GameUi.ResetControllerNotice();
+
+		GameUi.ControllerInfo info = GameUi.GetControllerInfo(joyName);
+
+		controllerNoticeTitle.Text = connected
+			? "Controller erkannt"
+			: "Controller getrennt";
 		controllerNoticeImage.Texture = ResourceLoader.Load<Texture2D>(info.TexturePath);
 		controllerNoticeName.Text = string.IsNullOrWhiteSpace(joyName)
-			? info.DisplayName
-			: $"{info.DisplayName}  ({joyName})";
+			? connected ? info.DisplayName : $"{info.DisplayName} nicht mehr erkannt"
+			: connected ? $"{info.DisplayName}  ({joyName})" : $"{info.DisplayName} getrennt  ({joyName})";
 		controllerNoticePanel.Modulate = Colors.White;
 		controllerNoticePanel.Show();
 		controllerNoticeTimer = ControllerNoticeDuration;
-		controllerNoticeShownThisRun = true;
-		GameUi.RumbleConnectedJoypads(0.12f, 0.36f, 0.14f);
+
+		if (connected)
+			GameUi.RumbleConnectedJoypads(0.12f, 0.36f, 0.14f);
 	}
 
 	private void UpdateControllerNotice(float dt)
@@ -418,59 +440,6 @@ public partial class MainMenu : Control
 
 		float alpha = Mathf.Clamp(controllerNoticeTimer, 0f, 1f);
 		controllerNoticePanel.Modulate = new Color(1f, 1f, 1f, alpha);
-	}
-
-	private ControllerInfo GetControllerInfo(string joyName)
-	{
-		string normalized = (joyName ?? "").ToLowerInvariant();
-
-		if (normalized.Contains("dualshock") ||
-			normalized.Contains("dual shock") ||
-			normalized.Contains("ps4"))
-		{
-			return new ControllerInfo(
-				"PS4 Controller",
-				"res://Assets/Controllers/controller_ps4_pixel.png"
-			);
-		}
-
-		if (normalized.Contains("dualsense") ||
-			normalized.Contains("dual sense") ||
-			normalized.Contains("ps5") ||
-			normalized.Contains("playstation"))
-		{
-			return new ControllerInfo(
-				"PS5 Controller",
-				"res://Assets/Controllers/controller_ps5_pixel.png"
-			);
-		}
-
-		if (normalized.Contains("xbox") ||
-			normalized.Contains("xinput") ||
-			normalized.Contains("microsoft"))
-		{
-			return new ControllerInfo(
-				"Neuer Xbox Controller",
-				"res://Assets/Controllers/controller_xbox_series_pixel.png"
-			);
-		}
-
-		return new ControllerInfo(
-			"Controller",
-			"res://Assets/Controllers/controller_generic_pixel.png"
-		);
-	}
-
-	private readonly struct ControllerInfo
-	{
-		public readonly string DisplayName;
-		public readonly string TexturePath;
-
-		public ControllerInfo(string displayName, string texturePath)
-		{
-			DisplayName = displayName;
-			TexturePath = texturePath;
-		}
 	}
 
 	private void ConnectButton(string path, Action handler)

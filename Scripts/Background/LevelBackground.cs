@@ -292,7 +292,7 @@ public partial class LevelBackground : Node2D
 				? sandY + entry.Spec.LocalY
 				: waterSurfaceY + entry.Spec.LocalY + Mathf.Sin(time * 0.45f + entry.Spec.LocalX * 0.01f) * 10f;
 
-			entry.Sprite.Position = new Vector2(x, y);
+			entry.Sprite.Position = new Vector2(Mathf.Round(x), Mathf.Round(y));
 		}
 	}
 

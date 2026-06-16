@@ -5,6 +5,7 @@ public static class GameUi
 {
 	private static Font pixelFont;
 	private static bool inputDefaultsReady = false;
+	private static bool controllerNoticeShownThisRun = false;
 	private const float ShortRumbleDuration = 0.16f;
 
 	public static readonly Color PanelBackground = new Color(1f, 1f, 1f, 0.24f);
@@ -286,5 +287,72 @@ public static class GameUi
 		style.ContentMarginBottom = 4;
 		style.ShadowSize = 0;
 		return style;
+	}
+
+	public static bool TryClaimControllerNotice()
+	{
+		if (controllerNoticeShownThisRun)
+			return false;
+
+		controllerNoticeShownThisRun = true;
+		return true;
+	}
+
+	public static void ResetControllerNotice()
+	{
+		controllerNoticeShownThisRun = false;
+	}
+
+	public static ControllerInfo GetControllerInfo(string joyName)
+	{
+		string normalized = (joyName ?? "").ToLowerInvariant();
+
+		if (normalized.Contains("dualshock") ||
+			normalized.Contains("dual shock") ||
+			normalized.Contains("ps4"))
+		{
+			return new ControllerInfo(
+				"PS4 Controller",
+				"res://Assets/Controllers/controller_ps4_pixel.png"
+			);
+		}
+
+		if (normalized.Contains("dualsense") ||
+			normalized.Contains("dual sense") ||
+			normalized.Contains("ps5") ||
+			normalized.Contains("playstation"))
+		{
+			return new ControllerInfo(
+				"PS5 Controller",
+				"res://Assets/Controllers/controller_ps5_pixel.png"
+			);
+		}
+
+		if (normalized.Contains("xbox") ||
+			normalized.Contains("xinput") ||
+			normalized.Contains("microsoft"))
+		{
+			return new ControllerInfo(
+				"Neuer Xbox Controller",
+				"res://Assets/Controllers/controller_xbox_series_pixel.png"
+			);
+		}
+
+		return new ControllerInfo(
+			"Controller",
+			"res://Assets/Controllers/controller_generic_pixel.png"
+		);
+	}
+
+	public readonly struct ControllerInfo
+	{
+		public readonly string DisplayName;
+		public readonly string TexturePath;
+
+		public ControllerInfo(string displayName, string texturePath)
+		{
+			DisplayName = displayName;
+			TexturePath = texturePath;
+		}
 	}
 }

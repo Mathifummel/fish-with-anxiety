@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 public partial class Main : Node2D
 {
+	private const float ControllerNoticeDuration = 3.8f;
+
 	[Export] public PlayerFish Player;
 	[Export] public bool MenuPreviewMode = false;
 
@@ -138,6 +140,10 @@ public partial class Main : Node2D
 	private Label ItemEffectLabel;
 	private TextureRect ItemHintArrow;
 	private Label ItemHintText;
+	private Panel ControllerNoticePanel;
+	private TextureRect ControllerNoticeImage;
+	private Label ControllerNoticeTitle;
+	private Label ControllerNoticeName;
 	private BaseButton PauseButton;
 	private ColorRect PauseBackdrop;
 	private Panel PausePanel;
@@ -170,12 +176,14 @@ public partial class Main : Node2D
 	private bool gameOverTriggered = false;
 	private string pendingPauseCustomAction = "";
 	private float pauseConfirmationTimer = 0f;
+	private float controllerNoticeTimer = 0f;
 
 	private StyleBoxFlat stressFillStyle;
 	private StyleBoxFlat stressBackgroundStyle;
 	private readonly Dictionary<PlayerFish.ControlScheme, Button> pauseModeButtons =
 		new Dictionary<PlayerFish.ControlScheme, Button>();
 	private readonly Dictionary<string, Button> pauseCustomButtons = new Dictionary<string, Button>();
+	private readonly Dictionary<int, string> knownJoypads = new Dictionary<int, string>();
 	private readonly List<CrossingWarning> crossingWarnings = new List<CrossingWarning>();
 
 	private sealed class CrossingWarning
@@ -200,6 +208,8 @@ public partial class Main : Node2D
 		CreateLevelNoticeLabel();
 		CreateItemEffectLabel();
 		CreateItemDirectionHint();
+		if (!MenuPreviewMode)
+			CreateControllerNotice();
 		CreatePauseMenu();
 		crossingWarningTexture =
 			ResourceLoader.Load<Texture2D>("res://Assets/exclamation_spritesheet_01.png");
@@ -209,6 +219,8 @@ public partial class Main : Node2D
 			SetupMenuPreviewRun();
 			return;
 		}
+
+		SyncConnectedJoypads();
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 
@@ -327,6 +339,12 @@ public partial class Main : Node2D
 	public override void _Process(double delta)
 	{
 		float dt = (float)delta;
+
+		if (!MenuPreviewMode)
+		{
+			SyncConnectedJoypads();
+			UpdateControllerNotice(dt);
+		}
 
 		if (gamePaused)
 		{
@@ -842,6 +860,175 @@ public partial class Main : Node2D
 	{
 		return keyEvent.PhysicalKeycode == Key.Escape ||
 			keyEvent.Keycode == Key.Escape;
+	}
+
+	private void CreateControllerNotice()
+	{
+		CanvasLayer ui = GetNodeOrNull<CanvasLayer>("UI");
+		if (ui == null)
+			return;
+
+		ControllerNoticePanel = new Panel();
+		ControllerNoticePanel.Visible = false;
+		ControllerNoticePanel.MouseFilter = Control.MouseFilterEnum.Ignore;
+		ControllerNoticePanel.AddThemeStyleboxOverride("panel", CreateControllerNoticeStyle());
+		ui.AddChild(ControllerNoticePanel);
+
+		HBoxContainer row = new HBoxContainer();
+		row.AnchorRight = 1f;
+		row.AnchorBottom = 1f;
+		row.OffsetLeft = 14f;
+		row.OffsetTop = 10f;
+		row.OffsetRight = -14f;
+		row.OffsetBottom = -10f;
+		row.Alignment = BoxContainer.AlignmentMode.Center;
+		row.AddThemeConstantOverride("separation", 12);
+		ControllerNoticePanel.AddChild(row);
+
+		ControllerNoticeImage = new TextureRect();
+		ControllerNoticeImage.CustomMinimumSize = new Vector2(104f, 70f);
+		ControllerNoticeImage.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		ControllerNoticeImage.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		row.AddChild(ControllerNoticeImage);
+
+		VBoxContainer copy = new VBoxContainer();
+		copy.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		copy.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+		copy.AddThemeConstantOverride("separation", 3);
+		row.AddChild(copy);
+
+		Label title = new Label();
+		title.Text = "Controller erkannt";
+		title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		title.ClipText = true;
+		GameUi.ApplyLabel(title, 17, GameUi.LightText);
+		copy.AddChild(title);
+		ControllerNoticeTitle = title;
+
+		ControllerNoticeName = new Label();
+		ControllerNoticeName.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		ControllerNoticeName.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		GameUi.ApplyLabel(ControllerNoticeName, 14, new Color(0.76f, 0.96f, 1f));
+		copy.AddChild(ControllerNoticeName);
+
+		PositionControllerNotice();
+	}
+
+	private void PositionControllerNotice()
+	{
+		if (ControllerNoticePanel == null)
+			return;
+
+		Vector2 viewport = GetViewportRect().Size;
+		float margin = 24f;
+		float availableWidth = Mathf.Max(260f, viewport.X - margin * 2f);
+		float width = Mathf.Clamp(availableWidth, 340f, 480f);
+		float height = 108f;
+
+		ControllerNoticePanel.AnchorLeft = 1f;
+		ControllerNoticePanel.AnchorTop = 1f;
+		ControllerNoticePanel.AnchorRight = 1f;
+		ControllerNoticePanel.AnchorBottom = 1f;
+		ControllerNoticePanel.OffsetLeft = -width - margin;
+		ControllerNoticePanel.OffsetTop = -height - margin;
+		ControllerNoticePanel.OffsetRight = -margin;
+		ControllerNoticePanel.OffsetBottom = -margin;
+	}
+
+	private StyleBoxFlat CreateControllerNoticeStyle()
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = new Color(0.02f, 0.12f, 0.17f, 0.92f);
+		style.BorderColor = new Color(0.7f, 0.96f, 1f, 0.82f);
+		style.BorderWidthLeft = 2;
+		style.BorderWidthTop = 2;
+		style.BorderWidthRight = 2;
+		style.BorderWidthBottom = 2;
+		style.CornerRadiusTopLeft = 4;
+		style.CornerRadiusTopRight = 4;
+		style.CornerRadiusBottomLeft = 4;
+		style.CornerRadiusBottomRight = 4;
+		style.ShadowColor = new Color(0f, 0.06f, 0.09f, 0.45f);
+		style.ShadowSize = 10;
+		return style;
+	}
+
+	private void SyncConnectedJoypads()
+	{
+		HashSet<int> connected = new HashSet<int>();
+
+		foreach (int device in Input.GetConnectedJoypads())
+		{
+			connected.Add(device);
+
+			if (knownJoypads.ContainsKey(device))
+				continue;
+
+			string joyName = Input.GetJoyName(device) ?? "";
+			knownJoypads[device] = joyName;
+			ShowControllerNotice(joyName, true);
+		}
+
+		List<int> removedDevices = new List<int>();
+
+		foreach (int device in knownJoypads.Keys)
+		{
+			if (!connected.Contains(device))
+				removedDevices.Add(device);
+		}
+
+		foreach (int device in removedDevices)
+		{
+			string joyName = knownJoypads[device];
+			knownJoypads.Remove(device);
+			ShowControllerNotice(joyName, false);
+		}
+	}
+
+	private void ShowControllerNotice(string joyName, bool connected)
+	{
+		if (ControllerNoticePanel == null)
+			return;
+
+		if (connected && !GameUi.TryClaimControllerNotice())
+			return;
+
+		if (!connected)
+			GameUi.ResetControllerNotice();
+
+		GameUi.ControllerInfo info = GameUi.GetControllerInfo(joyName);
+
+		ControllerNoticeTitle.Text = connected
+			? "Controller erkannt"
+			: "Controller getrennt";
+		ControllerNoticeImage.Texture = ResourceLoader.Load<Texture2D>(info.TexturePath);
+		ControllerNoticeName.Text = string.IsNullOrWhiteSpace(joyName)
+			? connected ? info.DisplayName : $"{info.DisplayName} nicht mehr erkannt"
+			: connected ? $"{info.DisplayName}  ({joyName})" : $"{info.DisplayName} getrennt  ({joyName})";
+		ControllerNoticePanel.Modulate = Colors.White;
+		ControllerNoticePanel.Show();
+		controllerNoticeTimer = ControllerNoticeDuration;
+
+		if (connected)
+			GameUi.RumbleConnectedJoypads(0.12f, 0.36f, 0.14f);
+	}
+
+	private void UpdateControllerNotice(float dt)
+	{
+		if (ControllerNoticePanel == null || !ControllerNoticePanel.Visible)
+			return;
+
+		controllerNoticeTimer -= dt;
+
+		if (controllerNoticeTimer <= 0f)
+		{
+			ControllerNoticePanel.Hide();
+			return;
+		}
+
+		float alpha = Mathf.Clamp(controllerNoticeTimer, 0f, 1f);
+		ControllerNoticePanel.Modulate = new Color(1f, 1f, 1f, alpha);
 	}
 
 	private void CreateCountdownLabel()

@@ -113,9 +113,7 @@ public partial class NameInput : Control
 		pageMargin.AddThemeConstantOverride("margin_bottom", 24);
 		AddChild(pageMargin);
 
-		VBoxContainer page = new VBoxContainer();
-		page.Alignment = BoxContainer.AlignmentMode.Center;
-		page.AddThemeConstantOverride("separation", 14);
+		Control page = new Control();
 		page.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 		page.SizeFlagsVertical = SizeFlags.ExpandFill;
 		pageMargin.AddChild(page);
@@ -124,15 +122,23 @@ public partial class NameInput : Control
 		logo.Texture = ResourceLoader.Load<Texture2D>("res://Assets/Spiellogo.png");
 		logo.ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional;
 		logo.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
-		logo.CustomMinimumSize = new Vector2(500, 96);
-		logo.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		logo.SetAnchorsPreset(LayoutPreset.TopWide);
+		logo.OffsetLeft = 0f;
+		logo.OffsetTop = 0f;
+		logo.OffsetRight = 0f;
+		logo.OffsetBottom = 96f;
+		logo.MouseFilter = MouseFilterEnum.Ignore;
 		page.AddChild(logo);
+
+		CenterContainer center = new CenterContainer();
+		center.SetAnchorsPreset(LayoutPreset.FullRect);
+		page.AddChild(center);
 
 		resultPanelHost = new Control();
 		resultPanelHost.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
 		resultPanelHost.SizeFlagsVertical = SizeFlags.ShrinkCenter;
 		resultPanelHost.CustomMinimumSize = new Vector2(620, 410);
-		page.AddChild(resultPanelHost);
+		center.AddChild(resultPanelHost);
 
 		resultPanel = new PanelContainer();
 		resultPanel.SetAnchorsPreset(LayoutPreset.FullRect);
