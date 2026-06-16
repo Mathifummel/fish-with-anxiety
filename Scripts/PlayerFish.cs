@@ -126,6 +126,7 @@ public partial class PlayerFish : CharacterBody2D
 			ResourceLoader.Load<Texture2D>("res://Assets/Bessofenerfisch1.png"),
 			ResourceLoader.Load<Texture2D>("res://Assets/Besoffenerfisch2.png")
 		};
+		GameUi.EnsureInputDefaults();
 		LoadControlSettings();
 	}
 
@@ -527,10 +528,15 @@ public partial class PlayerFish : CharacterBody2D
 
 	private bool IsBoostJustPressed()
 	{
+		GameUi.EnsureInputDefaults();
+
+		if (Input.IsActionJustPressed("ui_accept"))
+			return true;
+
 		if (CurrentControlScheme == ControlScheme.Custom)
 			return Input.IsActionJustPressed(CustomBoost);
 
-		return Input.IsActionJustPressed("ui_accept");
+		return false;
 	}
 
 	public static void EnsureCustomInputDefaults()
