@@ -10,6 +10,8 @@ public partial class PassiveFish : CharacterBody2D
 	[Export] public float DirectionChangeTimeMax = 4.2f;
 	[Export] public float WanderTurnStrength = 0.45f;
 	[Export] public float CollisionRadius = 22f;
+	[Export] public float SandBoundaryExtraPadding = 5f;
+	[Export] public float SandBoundaryPushSpeed = 110f;
 
 	private Vector2 moveDir = Vector2.Right;
 	private Vector2 currentVelocity = Vector2.Zero;
@@ -60,6 +62,12 @@ public partial class PassiveFish : CharacterBody2D
 		Velocity = currentVelocity;
 
 		MoveAndSlide();
+		currentVelocity = SandBoundary.ClampCharacterAboveSand(
+			this,
+			currentVelocity,
+			CollisionRadius + SandBoundaryExtraPadding,
+			SandBoundaryPushSpeed
+		);
 
 		if (Velocity.Length() > 0.1f)
 		{

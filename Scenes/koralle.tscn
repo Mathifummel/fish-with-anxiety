@@ -1,15 +1,24 @@
-[gd_scene format=3 uid="uid://b3kybybh17bm4"]
+[gd_scene load_steps=5 format=3 uid="uid://b3kybybh17bm4"]
 
-[ext_resource type="Texture2D" uid="uid://b1kjm72s74n8q" path="res://Assets/seetang.png" id="1_0mase"]
+[ext_resource type="Texture2D" uid="uid://b8i2336ge81a5" path="res://Assets/decoration_pack.png" id="1_deco"]
+
+[sub_resource type="Shader" id="Shader_deco_key"]
+code = "shader_type canvas_item;\n\nuniform float tolerance = 0.075;\n\nvoid fragment() {\n\tvec4 color = texture(TEXTURE, UV);\n\tfloat max_channel = max(color.r, max(color.g, color.b));\n\tfloat min_channel = min(color.r, min(color.g, color.b));\n\tif (max_channel > 0.82 && max_channel - min_channel < tolerance) {\n\t\tcolor.a = 0.0;\n\t}\n\tCOLOR = color;\n}\n"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_deco_key"]
+shader = SubResource("Shader_deco_key")
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_0mase"]
-size = Vector2(44, 118)
+size = Vector2(92, 54)
 
 [node name="Koralle" type="StaticBody2D" unique_id=1693168621]
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=516211566]
-scale = Vector2(0.46, 0.46)
-texture = ExtResource("1_0mase")
+material = SubResource("ShaderMaterial_deco_key")
+scale = Vector2(0.42, 0.42)
+texture = ExtResource("1_deco")
+region_enabled = true
+region_rect = Rect2(65, 625, 260, 155)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=875867387]
 shape = SubResource("RectangleShape2D_0mase")

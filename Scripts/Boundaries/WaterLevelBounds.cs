@@ -51,6 +51,8 @@ public partial class WaterLevelBounds : Node
 
 		player.UseSwimBounds = true;
 		player.MinSwimY = WaterSurfaceY + SurfacePadding;
-		player.MaxSwimY = SandY - SandPadding;
+
+		float sandPadding = Mathf.Max(SandPadding, player.CollisionRadius);
+		player.MaxSwimY = SandBoundary.GetMaxSwimY(this, player.GlobalPosition.X, sandPadding);
 	}
 }

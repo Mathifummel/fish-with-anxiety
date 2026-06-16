@@ -38,6 +38,8 @@ public partial class NPCFish : CharacterBody2D
 	// Offset movement
 	[Export] public float ApproachOffsetStrength = 100f;
 	[Export] public float CollisionRadius = 40f;
+	[Export] public float SandBoundaryExtraPadding = 4f;
+	[Export] public float SandBoundaryPushSpeed = 210f;
 	[Export] public EnemySkin Skin = EnemySkin.Gegnerfisch;
 
 	public Node2D Player; // assigned from Main
@@ -184,6 +186,7 @@ public partial class NPCFish : CharacterBody2D
 
 		Velocity = finalDir * currentSpeed;
 		MoveAndSlide();
+		ApplySandBoundary();
 
 		UpdateRotation(dt);
 	}
@@ -200,6 +203,7 @@ public partial class NPCFish : CharacterBody2D
 
 		Velocity = CrossingDirection.Normalized() * Speed;
 		MoveAndSlide();
+		ApplySandBoundary();
 		UpdateRotation(dt);
 	}
 
@@ -232,7 +236,18 @@ public partial class NPCFish : CharacterBody2D
 
 		Velocity = fleeDir * fleeSpeed;
 		MoveAndSlide();
+		ApplySandBoundary();
 		UpdateRotation(dt);
+	}
+
+	private void ApplySandBoundary()
+	{
+		Velocity = SandBoundary.ClampCharacterAboveSand(
+			this,
+			Velocity,
+			CollisionRadius + SandBoundaryExtraPadding,
+			SandBoundaryPushSpeed
+		);
 	}
 
 	private void UpdateRotation(float dt)

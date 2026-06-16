@@ -3,6 +3,9 @@ using Godot;
 public partial class MenuChaseBackdrop : Node2D
 {
 	private const int EnemyCount = 13;
+	private const float RouteStartPadding = 260f;
+	private const float RouteEndPadding = 720f;
+	private const float RouteSpeed = 0.055f;
 	private readonly Sprite2D[] enemies = new Sprite2D[EnemyCount];
 	private readonly Sprite2D[] bubbles = new Sprite2D[32];
 	private readonly Vector2[] enemyOffsets = new Vector2[EnemyCount];
@@ -142,8 +145,8 @@ public partial class MenuChaseBackdrop : Node2D
 		if (viewport.X <= 1f || viewport.Y <= 1f)
 			viewport = new Vector2(1280f, 720f);
 
-		float progress = Mathf.PosMod(time * 0.085f, 1f);
-		float x = Mathf.Lerp(-180f, viewport.X + 220f, progress);
+		float progress = Mathf.PosMod(time * RouteSpeed, 1f);
+		float x = Mathf.Lerp(-RouteStartPadding, viewport.X + RouteEndPadding, progress);
 		float y = viewport.Y * 0.5f + Mathf.Sin(progress * Mathf.Tau * 1.2f + 0.45f) * viewport.Y * 0.18f;
 		Vector2 leader = new Vector2(x, y);
 		float fade = Mathf.Clamp(Mathf.Sin(progress * Mathf.Pi), 0f, 1f);

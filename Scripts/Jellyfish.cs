@@ -11,6 +11,8 @@ public partial class Jellyfish : CharacterBody2D
 	[Export] public float PulseFrameRate = 4.8f;
 	[Export] public float PulseAmplitude = 0.09f;
 	[Export] public float CollisionRadius = 32f;
+	[Export] public float SandBoundaryExtraPadding = 6f;
+	[Export] public float SandBoundaryPushSpeed = 120f;
 
 	public Node2D Player;
 
@@ -87,6 +89,12 @@ public partial class Jellyfish : CharacterBody2D
 		Velocity = currentVelocity;
 
 		MoveAndSlide();
+		currentVelocity = SandBoundary.ClampCharacterAboveSand(
+			this,
+			currentVelocity,
+			CollisionRadius + SandBoundaryExtraPadding,
+			SandBoundaryPushSpeed
+		);
 		UpdateVisual(dt);
 	}
 

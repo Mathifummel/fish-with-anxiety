@@ -64,6 +64,10 @@ public partial class Main : Node2D
 	[Export] public float MaxSpawnDistance = 1450f;
 	[Export] public float DespawnDistance = 1900f;
 	[Export] public float MinSpawnSpacing = 170f;
+	[Export] public float SpawnWaterBoundaryMargin = 145f;
+	[Export] public float SpawnWaterTopMargin = 420f;
+	[Export] public float SpawnWaterBottomMargin = 125f;
+	[Export] public float SpawnOutOfSightMargin = 135f;
 	[Export] public int MaxSpawnAttempts = 80;
 	[Export] public float SpawnCheckInterval = 0.35f;
 	[Export] public float SpawnMovementStep = 260f;
@@ -1128,14 +1132,29 @@ public partial class Main : Node2D
 			Player.Position +
 			forward * (float)GD.RandRange(CrossingLaneMinDistance, CrossingLaneMaxDistance);
 
-		Vector2 spawnPosition =
-			laneCenter +
-			side * sideSign * (float)GD.RandRange(CrossingSideMinDistance, CrossingSideMaxDistance);
-		spawnPosition = ClampToWaterBounds(spawnPosition, 72f);
-		Vector2 crossingDirection =
-			(-side * sideSign + forward * (float)GD.RandRange(-0.18f, 0.34f)).Normalized();
+		Vector2 spawnPosition = Vector2.Zero;
+		Vector2 crossingDirection = Vector2.Zero;
 
-		if (crossingDirection == Vector2.Zero)
+		for (int i = 0; i < MaxSpawnAttempts; i++)
+		{
+			spawnPosition =
+				laneCenter +
+				side * sideSign * (float)GD.RandRange(CrossingSideMinDistance, CrossingSideMaxDistance);
+			spawnPosition = ClampToSpawnWaterBounds(spawnPosition);
+			crossingDirection =
+				(-side * sideSign + forward * (float)GD.RandRange(-0.18f, 0.34f)).Normalized();
+
+			if (crossingDirection != Vector2.Zero &&
+				IsInSpawnWaterBounds(spawnPosition) &&
+				IsOutOfSightPosition(spawnPosition, 72f))
+			{
+				break;
+			}
+
+			spawnPosition = Vector2.Zero;
+		}
+
+		if (spawnPosition == Vector2.Zero || crossingDirection == Vector2.Zero)
 			return false;
 
 		CrossingWarning warning = new CrossingWarning
@@ -1548,7 +1567,9 @@ public partial class Main : Node2D
 		{
 			float angle = (float)GD.RandRange(0f, Mathf.Tau);
 			float distance = (float)GD.RandRange(MinSpawnDistance, MaxSpawnDistance);
-			Vector2 candidate = Player.Position + Vector2.FromAngle(angle) * distance;
+			Vector2 candidate = ClampToSpawnWaterBounds(
+				Player.Position + Vector2.FromAngle(angle) * distance
+			);
 
 			if (IsItemSpawnPositionSafe(candidate))
 				return candidate;
@@ -1879,23 +1900,28 @@ public partial class Main : Node2D
 
 	private Vector2 GetSafeSpawnPosition(bool preferChaseAngle = false)
 	{
-		Vector2 fallback = ClampToWaterBounds(Player.Position + Vector2.Right * MaxSpawnDistance);
+		Vector2 fallback = GetFallbackSpawnPosition(Vector2.Right);
 		float bestClearance = -1f;
 
 		for (int i = 0; i < MaxSpawnAttempts; i++)
 		{
 			float angle = GetSpawnAngle(preferChaseAngle, i);
 			float distance = (float)GD.RandRange(MinSpawnDistance, MaxSpawnDistance);
-			Vector2 candidate = Player.Position + Vector2.FromAngle(angle) * distance;
+			Vector2 candidate = ClampToSpawnWaterBounds(
+				Player.Position + Vector2.FromAngle(angle) * distance
+			);
 
 			if (IsSpawnPositionSafe(candidate))
 				return candidate;
 
 			float clearance = GetSpawnClearance(candidate);
-			if (clearance > bestClearance)
+			if (IsInSpawnWaterBounds(candidate) &&
+				IsOutOfSightPosition(candidate, SpawnOutOfSightMargin) &&
+				candidate.DistanceTo(Player.Position) >= MinSpawnDistance &&
+				clearance > bestClearance)
 			{
 				bestClearance = clearance;
-				fallback = ClampToWaterBounds(candidate);
+				fallback = candidate;
 			}
 		}
 
@@ -1909,11 +1935,7 @@ public partial class Main : Node2D
 
 		Vector2 forward = GetPlayerMoveDirection();
 		Vector2 side = new Vector2(-forward.Y, forward.X);
-		Vector2 fallback =
-			ClampToWaterBounds(
-				Player.Position +
-				forward * DirectionalEnemySpawnDistance
-			);
+		Vector2 fallback = GetFallbackSpawnPosition(forward);
 		float bestClearance = -1f;
 
 		for (int i = 0; i < MaxSpawnAttempts; i++)
@@ -1930,16 +1952,19 @@ public partial class Main : Node2D
 				Player.Position +
 				forward * distance +
 				side * spread;
+			candidate = ClampToSpawnWaterBounds(candidate);
 
 			if (IsSpawnPositionSafe(candidate))
 				return candidate;
 
 			float clearance = GetSpawnClearance(candidate);
-			if (candidate.DistanceTo(Player.Position) >= MinSpawnDistance &&
+			if (IsInSpawnWaterBounds(candidate) &&
+				IsOutOfSightPosition(candidate, SpawnOutOfSightMargin) &&
+				candidate.DistanceTo(Player.Position) >= MinSpawnDistance &&
 				clearance > bestClearance)
 			{
 				bestClearance = clearance;
-				fallback = ClampToWaterBounds(candidate);
+				fallback = candidate;
 			}
 		}
 
@@ -2039,7 +2064,10 @@ public partial class Main : Node2D
 
 	private bool IsSpawnPositionSafe(Vector2 candidate)
 	{
-		if (!IsInWaterBounds(candidate))
+		if (!IsInSpawnWaterBounds(candidate))
+			return false;
+
+		if (!IsOutOfSightPosition(candidate, SpawnOutOfSightMargin))
 			return false;
 
 		if (candidate.DistanceTo(Player.Position) < MinSpawnDistance)
@@ -2054,20 +2082,104 @@ public partial class Main : Node2D
 		return true;
 	}
 
+	private Vector2 GetFallbackSpawnPosition(Vector2 preferredDirection)
+	{
+		Vector2 preferred = preferredDirection.LengthSquared() > 0.001f
+			? preferredDirection.Normalized()
+			: Vector2.Right;
+		Vector2[] directions = new Vector2[]
+		{
+			preferred,
+			Vector2.Right,
+			Vector2.Left,
+			Vector2.Down,
+			Vector2.Up
+		};
+
+		foreach (Vector2 direction in directions)
+		{
+			Vector2 fallback = ClampToSpawnWaterBounds(
+				Player.Position + direction * MaxSpawnDistance
+			);
+
+			if (IsInSpawnWaterBounds(fallback) &&
+				IsOutOfSightPosition(fallback, SpawnOutOfSightMargin))
+			{
+				return fallback;
+			}
+		}
+
+		return ClampToSpawnWaterBounds(
+			Player.Position + Vector2.Right * MaxSpawnDistance
+		);
+	}
+
+	private bool IsOutOfSightPosition(Vector2 position, float margin)
+	{
+		return !GetCameraWorldRect(margin).HasPoint(position);
+	}
+
+	private Rect2 GetCameraWorldRect(float margin)
+	{
+		Vector2 viewport = GetViewportRect().Size;
+		if (viewport.X <= 1f || viewport.Y <= 1f)
+			viewport = new Vector2(1280f, 720f);
+
+		Camera2D camera = GetViewport().GetCamera2D();
+		Vector2 center = camera != null ? camera.GlobalPosition : Player.Position;
+		Vector2 zoom = camera != null ? camera.Zoom : Vector2.One;
+		Vector2 visibleSize = new Vector2(
+			viewport.X / Mathf.Max(zoom.X, 0.01f),
+			viewport.Y / Mathf.Max(zoom.Y, 0.01f)
+		);
+		Vector2 padding = new Vector2(margin, margin);
+
+		return new Rect2(center - visibleSize * 0.5f - padding, visibleSize + padding * 2f);
+	}
+
 	private bool IsInWaterBounds(Vector2 position, float margin = 70f)
 	{
-		return position.Y >= OceanMapBackground.WorldSkyBottomY + margin &&
-			position.Y <= OceanMapBackground.WorldSandTopY - margin;
+		float minY = OceanMapBackground.WorldSkyBottomY + margin;
+		float maxY = Mathf.Max(minY, GetSandLimitedBottomY(position.X, margin));
+		return position.Y >= minY && position.Y <= maxY;
+	}
+
+	private bool IsInSpawnWaterBounds(Vector2 position)
+	{
+		float minY = OceanMapBackground.WorldSkyBottomY + SpawnWaterTopMargin;
+		float maxY = Mathf.Max(minY, GetSandLimitedBottomY(position.X, SpawnWaterBottomMargin));
+		return position.Y >= minY && position.Y <= maxY;
 	}
 
 	private Vector2 ClampToWaterBounds(Vector2 position, float margin = 82f)
 	{
+		float minY = OceanMapBackground.WorldSkyBottomY + margin;
+		float maxY = Mathf.Max(minY, GetSandLimitedBottomY(position.X, margin));
 		position.Y = Mathf.Clamp(
 			position.Y,
-			OceanMapBackground.WorldSkyBottomY + margin,
-			OceanMapBackground.WorldSandTopY - margin
+			minY,
+			maxY
 		);
 		return position;
+	}
+
+	private Vector2 ClampToSpawnWaterBounds(Vector2 position)
+	{
+		float minY = OceanMapBackground.WorldSkyBottomY + SpawnWaterTopMargin;
+		float maxY = Mathf.Max(minY, GetSandLimitedBottomY(position.X, SpawnWaterBottomMargin));
+		position.Y = Mathf.Clamp(
+			position.Y,
+			minY,
+			maxY
+		);
+		return position;
+	}
+
+	private float GetSandLimitedBottomY(float x, float margin)
+	{
+		float flatSandBottom = OceanMapBackground.WorldSandTopY - margin;
+		float visibleSandBottom = SandBoundary.GetMaxSwimY(this, x, margin);
+		return Mathf.Min(flatSandBottom, visibleSandBottom);
 	}
 
 	private float GetSpawnClearance(Vector2 candidate)
@@ -2306,10 +2418,9 @@ public partial class Main : Node2D
 		Vector2 forward = GetPlayerMoveDirection();
 		Vector2 side = new Vector2(-forward.Y, forward.X);
 		float sideSign = GD.Randf() < 0.5f ? -1f : 1f;
-		Vector2 center =
-			Player.Position +
-			forward * SwarmSpawnDistance +
-			side * sideSign * 320f;
+		Vector2 center = GetFallbackSpawnPosition(
+			(forward + side * sideSign * 0.45f).Normalized()
+		);
 
 		for (int i = 0; i < count; i++)
 		{
@@ -2320,7 +2431,7 @@ public partial class Main : Node2D
 				side * row * SwarmSpacing +
 				forward * (float)GD.RandRange(-48f, 48f);
 
-			npc.Position = center + offset;
+			npc.Position = ClampToSpawnWaterBounds(center + offset);
 			npc.Player = Player;
 			npc.Speed *= npcSpeedMultiplier * 1.14f;
 			npc.ApproachOffsetStrength *= 1.15f;

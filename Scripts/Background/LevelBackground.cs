@@ -11,27 +11,32 @@ public partial class LevelBackground : Node2D
 
 	public const float WATER_SURFACE_Y = -80f;
 	public const float SAND_Y = 760f;
-	public const float WATER_SURFACE_STRIP_HEIGHT = 190f;
-	public const float PLAYER_SURFACE_PADDING = 54f;
-	public const float PLAYER_SAND_PADDING = 92f;
+	public const float WATER_SURFACE_STRIP_HEIGHT = 724f;
+	public const float PLAYER_SURFACE_PADDING = 38f;
+	public const float PLAYER_SAND_PADDING = 36f;
 	public const float PLAYER_MIN_Y = WATER_SURFACE_Y + PLAYER_SURFACE_PADDING;
 	public const float PLAYER_MAX_Y = SAND_Y - PLAYER_SAND_PADDING;
 
-	private const string SkyTexturePath = "res://Assets/Himmelneu.png";
-	private const string WaterTexturePath = "res://Assets/wasserneu2.png";
-	private const string SandTexturePath = "res://Assets/sandneu2.png";
-	private const string WaterSurfaceTexturePath = "res://Assets/Wasserrand.png";
-	private const string DetailPackTexturePath = "res://Assets/Detailpack1.png";
+	private static readonly string[] SkyTexturePaths = { "res://Assets/sky_background.png", "res://Assets/Himmelneu.png" };
+	private static readonly string[] WaterTexturePaths = { "res://Assets/water_background.png", "res://Assets/wasserneu2.png" };
+	private static readonly string[] SandFillTexturePaths = { "res://Assets/sand_fill.png", "res://Assets/sandneu2.png" };
+	private static readonly string[] SandEdgeTexturePaths = { "res://Assets/sand_edge_strip.png", "res://Assets/sandneu2.png" };
+	private static readonly string[] WaterSurfaceTexturePaths = { "res://Assets/water_surface_strip.png", "res://Assets/Wasserrand.png" };
+	private static readonly string[] DecorationTexturePaths = { "res://Assets/decoration_pack.png", "res://Assets/Detailpack1.png" };
 
 	private const float ScreenWaterSurfaceRatio = 0.30f;
 	private const float ScreenSandRatio = 0.86f;
-	private const float SkySourceY = 680f;
+	private const float SkySourceY = 260f;
 	private const float WaterSourceY = 0f;
-	private const float WaterSurfaceSourceY = 220f;
-	private const float WaterSurfaceVisualOffset = 86f;
+	private const float WaterSurfaceOriginY = 355f;
+	private const float SandEdgeOriginY = 420f;
+	private const float SandFillOverlap = 260f;
 	private const float HorizontalMargin = 960f;
 	private const float VerticalMargin = 480f;
 	private const float DecorationRepeatWidth = 1254f;
+	private const float SandWaveA = 34f;
+	private const float SandWaveB = 18f;
+	private const float SandWaveC = 9f;
 
 	[Export] public BackgroundMode Mode = BackgroundMode.Screen;
 	[Export] public float WaterSurfaceY = WATER_SURFACE_Y;
@@ -43,47 +48,69 @@ public partial class LevelBackground : Node2D
 
 	private Texture2D skyTexture;
 	private Texture2D waterTexture;
-	private Texture2D sandTexture;
+	private Texture2D sandFillTexture;
+	private Texture2D sandEdgeTexture;
 	private Texture2D waterSurfaceTexture;
-	private Texture2D detailPackTexture;
+	private Texture2D decorationPackTexture;
 
 	private Sprite2D skyLayer;
 	private Sprite2D waterLayer;
-	private Sprite2D sandLayer;
+	private Sprite2D sandFillLayer;
+	private Sprite2D sandEdgeLayer;
 	private Sprite2D waterSurfaceLayer;
 	private Node2D decorationRoot;
 	private Node2D followTarget;
 	private WaterLevelBounds swimBounds;
 	private float time = 0f;
+	private int[] sandEdgeTopPixels;
 
 	private static readonly Dictionary<string, Texture2D> keyedTextureCache = new Dictionary<string, Texture2D>();
-
-	private readonly List<DecorationEntry> decorationEntries = new List<DecorationEntry>();
 	private readonly Dictionary<string, Texture2D> decorationTextureCache = new Dictionary<string, Texture2D>();
+	private readonly List<DecorationEntry> decorationEntries = new List<DecorationEntry>();
 
 	private enum DecorationAnchor
 	{
-		Water,
-		Sand
+		SandBack,
+		Sand,
+		Bubble
 	}
 
 	private sealed class DecorationSpec
 	{
 		public Rect2 Source;
 		public float LocalX;
-		public float LocalY;
+		public float GroundOffset;
 		public float Scale;
 		public DecorationAnchor Anchor;
 		public int ZIndex;
+		public float Chance;
+		public float JitterX;
+		public float BubbleSpeed;
+		public Color Modulate;
 
-		public DecorationSpec(Rect2 source, float localX, float localY, float scale, DecorationAnchor anchor, int zIndex)
+		public DecorationSpec(
+			Rect2 source,
+			float localX,
+			float groundOffset,
+			float scale,
+			DecorationAnchor anchor,
+			int zIndex,
+			float chance = 1f,
+			float jitterX = 80f,
+			float bubbleSpeed = 0f,
+			Color? modulate = null
+		)
 		{
 			Source = source;
 			LocalX = localX;
-			LocalY = localY;
+			GroundOffset = groundOffset;
 			Scale = scale;
 			Anchor = anchor;
 			ZIndex = zIndex;
+			Chance = chance;
+			JitterX = jitterX;
+			BubbleSpeed = bubbleSpeed;
+			Modulate = modulate ?? Colors.White;
 		}
 	}
 
@@ -92,19 +119,28 @@ public partial class LevelBackground : Node2D
 		public Sprite2D Sprite;
 		public DecorationSpec Spec;
 		public int CycleOffset;
+		public int SpecIndex;
+		public float TextureHeight;
+		public float VisibleBottomInset;
 	}
 
-	private readonly DecorationSpec[] decorationSpecs = new DecorationSpec[]
+	private readonly DecorationSpec[] decorationSpecs =
 	{
-		new DecorationSpec(new Rect2(150f, 120f, 280f, 350f), 190f, -160f, 0.58f, DecorationAnchor.Sand, 6),
-		new DecorationSpec(new Rect2(545f, 150f, 230f, 335f), 640f, -145f, 0.55f, DecorationAnchor.Sand, 6),
-		new DecorationSpec(new Rect2(850f, 555f, 265f, 235f), 985f, -98f, 0.58f, DecorationAnchor.Sand, 6),
-		new DecorationSpec(new Rect2(135f, 560f, 310f, 210f), 390f, -62f, 0.52f, DecorationAnchor.Sand, 5),
-		new DecorationSpec(new Rect2(535f, 535f, 275f, 245f), 770f, -78f, 0.56f, DecorationAnchor.Sand, 5),
-		new DecorationSpec(new Rect2(155f, 900f, 235f, 190f), 1130f, -42f, 0.44f, DecorationAnchor.Sand, 7),
-		new DecorationSpec(new Rect2(535f, 900f, 260f, 200f), 70f, -46f, 0.42f, DecorationAnchor.Sand, 7),
-		new DecorationSpec(new Rect2(875f, 895f, 250f, 190f), 520f, -38f, 0.40f, DecorationAnchor.Sand, 7),
-		new DecorationSpec(new Rect2(890f, 165f, 165f, 305f), 1040f, 235f, 0.46f, DecorationAnchor.Water, 4)
+		new DecorationSpec(new Rect2(120f, 350f, 235f, 220f), 260f, 16f, 0.50f, DecorationAnchor.Sand, -4, 0.55f, 95f),
+		new DecorationSpec(new Rect2(480f, 350f, 245f, 220f), 610f, 14f, 0.48f, DecorationAnchor.Sand, -4, 0.56f, 95f),
+		new DecorationSpec(new Rect2(810f, 350f, 280f, 220f), 935f, 18f, 0.50f, DecorationAnchor.Sand, -4, 0.55f, 95f),
+		new DecorationSpec(new Rect2(65f, 625f, 260f, 155f), 160f, 18f, 0.48f, DecorationAnchor.Sand, -3, 0.62f, 105f),
+		new DecorationSpec(new Rect2(375f, 625f, 225f, 150f), 500f, 18f, 0.43f, DecorationAnchor.Sand, -3, 0.54f, 105f),
+		new DecorationSpec(new Rect2(685f, 600f, 210f, 175f), 820f, 20f, 0.46f, DecorationAnchor.Sand, -3, 0.50f, 105f),
+		new DecorationSpec(new Rect2(940f, 625f, 250f, 150f), 1120f, 18f, 0.44f, DecorationAnchor.Sand, -3, 0.54f, 105f),
+		new DecorationSpec(new Rect2(125f, 805f, 170f, 140f), 330f, 10f, 0.34f, DecorationAnchor.Sand, -2, 0.48f, 80f),
+		new DecorationSpec(new Rect2(415f, 805f, 160f, 120f), 675f, 9f, 0.34f, DecorationAnchor.Sand, -2, 0.48f, 80f),
+		new DecorationSpec(new Rect2(690f, 805f, 170f, 120f), 980f, 9f, 0.34f, DecorationAnchor.Sand, -2, 0.48f, 80f),
+		new DecorationSpec(new Rect2(265f, 960f, 385f, 120f), 415f, 18f, 0.36f, DecorationAnchor.Sand, -2, 0.45f, 95f),
+		new DecorationSpec(new Rect2(680f, 960f, 320f, 105f), 880f, 17f, 0.36f, DecorationAnchor.Sand, -2, 0.42f, 95f),
+		new DecorationSpec(new Rect2(210f, 1095f, 125f, 145f), 210f, 0f, 0.42f, DecorationAnchor.Bubble, -6, 0.70f, 160f, 42f, new Color(1f, 1f, 1f, 0.62f)),
+		new DecorationSpec(new Rect2(545f, 1085f, 160f, 160f), 610f, 0f, 0.44f, DecorationAnchor.Bubble, -6, 0.72f, 180f, 52f, new Color(1f, 1f, 1f, 0.66f)),
+		new DecorationSpec(new Rect2(910f, 1090f, 150f, 155f), 1040f, 0f, 0.42f, DecorationAnchor.Bubble, -6, 0.70f, 160f, 46f, new Color(1f, 1f, 1f, 0.60f))
 	};
 
 	public override void _Ready()
@@ -112,6 +148,7 @@ public partial class LevelBackground : Node2D
 		ZIndex = -1000;
 		ZAsRelative = false;
 		ProcessMode = ProcessModeEnum.Always;
+		AddToGroup(SandBoundary.LevelBackgroundGroup);
 
 		LoadTextures();
 		BuildLayers();
@@ -141,19 +178,22 @@ public partial class LevelBackground : Node2D
 
 	private void LoadTextures()
 	{
-		skyTexture = LoadTexture(SkyTexturePath);
-		waterTexture = LoadTexture(WaterTexturePath);
-		sandTexture = LoadTexture(SandTexturePath);
-		waterSurfaceTexture = LoadTextureWithCheckerTransparency(WaterSurfaceTexturePath, 8);
-		detailPackTexture = LoadTextureWithCheckerTransparency(DetailPackTexturePath, -1);
+		skyTexture = LoadFirstTexture(SkyTexturePaths);
+		waterTexture = LoadFirstTexture(WaterTexturePaths);
+		sandFillTexture = LoadFirstTexture(SandFillTexturePaths);
+		sandEdgeTexture = LoadFirstTextureWithCheckerTransparency(SandEdgeTexturePaths, -1);
+		waterSurfaceTexture = LoadFirstTextureWithCheckerTransparency(WaterSurfaceTexturePaths, 8);
+		decorationPackTexture = LoadFirstTextureWithCheckerTransparency(DecorationTexturePaths, -1);
+		sandEdgeTopPixels = BuildSandEdgeTopCache(sandEdgeTexture);
 	}
 
 	private void BuildLayers()
 	{
-		skyLayer = CreateRepeatingLayer("Sky", skyTexture, -40, null);
-		waterLayer = CreateRepeatingLayer("WaterBackground", waterTexture, -30, null);
-		sandLayer = CreateRepeatingLayer("Sand", sandTexture, -20, null);
-		waterSurfaceLayer = CreateRepeatingLayer("WaterSurface", waterSurfaceTexture, -10, null);
+		skyLayer = CreateRepeatingLayer("Sky", skyTexture, -40);
+		waterLayer = CreateRepeatingLayer("WaterBackground", waterTexture, -30);
+		sandFillLayer = CreateRepeatingLayer("SandFill", sandFillTexture, -20);
+		sandEdgeLayer = CreateRepeatingLayer("SandEdge", sandEdgeTexture, -12);
+		waterSurfaceLayer = CreateRepeatingLayer("WaterSurface", waterSurfaceTexture, -10);
 
 		decorationRoot = new Node2D();
 		decorationRoot.Name = "Decorations";
@@ -162,7 +202,7 @@ public partial class LevelBackground : Node2D
 		BuildDecorations();
 	}
 
-	private Sprite2D CreateRepeatingLayer(string layerName, Texture2D texture, int zIndex, Material material)
+	private Sprite2D CreateRepeatingLayer(string layerName, Texture2D texture, int zIndex)
 	{
 		Sprite2D sprite = new Sprite2D();
 		sprite.Name = layerName;
@@ -172,34 +212,39 @@ public partial class LevelBackground : Node2D
 		sprite.TextureRepeat = TextureRepeatEnum.Enabled;
 		sprite.TextureFilter = TextureFilterEnum.Nearest;
 		sprite.ZIndex = zIndex;
-		sprite.Material = material;
 		AddChild(sprite);
 		return sprite;
 	}
 
 	private void BuildDecorations()
 	{
-		if (!EnableDecorations || detailPackTexture == null || decorationRoot == null)
+		if (!EnableDecorations || decorationPackTexture == null || decorationRoot == null)
 			return;
 
 		for (int cycle = -3; cycle <= 3; cycle++)
 		{
-			foreach (DecorationSpec spec in decorationSpecs)
+			for (int i = 0; i < decorationSpecs.Length; i++)
 			{
+				DecorationSpec spec = decorationSpecs[i];
 				Sprite2D sprite = new Sprite2D();
 				sprite.Name = $"Deco_{spec.Anchor}_{decorationEntries.Count:00}";
-				sprite.Texture = GetDecorationTexture(spec.Source);
+				Texture2D texture = GetDecorationTexture(spec.Source);
+				sprite.Texture = texture;
 				sprite.Centered = true;
 				sprite.TextureFilter = TextureFilterEnum.Nearest;
 				sprite.ZIndex = spec.ZIndex;
 				sprite.Scale = new Vector2(spec.Scale, spec.Scale);
+				sprite.Modulate = spec.Modulate;
 				decorationRoot.AddChild(sprite);
 
 				decorationEntries.Add(new DecorationEntry
 				{
 					Sprite = sprite,
 					Spec = spec,
-					CycleOffset = cycle
+					CycleOffset = cycle,
+					SpecIndex = i,
+					TextureHeight = texture?.GetHeight() ?? spec.Source.Size.Y,
+					VisibleBottomInset = GetVisibleBottomInset(texture)
 				});
 			}
 		}
@@ -212,10 +257,10 @@ public partial class LevelBackground : Node2D
 		if (decorationTextureCache.TryGetValue(key, out Texture2D cachedTexture))
 			return cachedTexture;
 
-		Image sourceImage = detailPackTexture?.GetImage();
+		Image sourceImage = decorationPackTexture?.GetImage();
 
 		if (sourceImage == null || sourceImage.IsEmpty())
-			return detailPackTexture;
+			return decorationPackTexture;
 
 		Rect2I sourceRect = new Rect2I(
 			Mathf.RoundToInt(source.Position.X),
@@ -236,9 +281,82 @@ public partial class LevelBackground : Node2D
 		return texture;
 	}
 
+	private int[] BuildSandEdgeTopCache(Texture2D texture)
+	{
+		Image image = texture?.GetImage();
+
+		if (image == null || image.IsEmpty())
+			return null;
+
+		if (image.GetFormat() != Image.Format.Rgba8)
+			image.Convert(Image.Format.Rgba8);
+
+		int width = image.GetWidth();
+		int height = image.GetHeight();
+		int[] topPixels = new int[width];
+		float totalTop = 0f;
+		int foundColumns = 0;
+
+		for (int x = 0; x < width; x++)
+		{
+			int top = height;
+
+			for (int y = 0; y < height; y++)
+			{
+				if (image.GetPixel(x, y).A > 0.12f)
+				{
+					top = y;
+					break;
+				}
+			}
+
+			if (top < height)
+			{
+				topPixels[x] = top;
+				totalTop += top;
+				foundColumns++;
+			}
+			else
+			{
+				topPixels[x] = Mathf.RoundToInt(SandEdgeOriginY);
+			}
+		}
+
+		if (foundColumns == 0)
+			return null;
+
+		float averageTop = totalTop / foundColumns;
+		return averageTop < 80f ? null : topPixels;
+	}
+
+	private float GetVisibleBottomInset(Texture2D texture)
+	{
+		Image image = texture?.GetImage();
+
+		if (image == null || image.IsEmpty())
+			return 0f;
+
+		if (image.GetFormat() != Image.Format.Rgba8)
+			image.Convert(Image.Format.Rgba8);
+
+		int width = image.GetWidth();
+		int height = image.GetHeight();
+
+		for (int y = height - 1; y >= 0; y--)
+		{
+			for (int x = 0; x < width; x++)
+			{
+				if (image.GetPixel(x, y).A > 0.12f)
+					return height - 1 - y;
+			}
+		}
+
+		return 0f;
+	}
+
 	private void UpdateLayers()
 	{
-		if (skyLayer == null || waterLayer == null || sandLayer == null || waterSurfaceLayer == null)
+		if (skyLayer == null || waterLayer == null || sandFillLayer == null || sandEdgeLayer == null || waterSurfaceLayer == null)
 			return;
 
 		if (Mode == BackgroundMode.World)
@@ -258,13 +376,14 @@ public partial class LevelBackground : Node2D
 		);
 
 		float scrollX = center.X * 0.08f + time * 6f;
-		float surfaceTop = WaterSurfaceY - WaterSurfaceVisualOffset;
+		float sandFillTop = sandEdgeTexture != null ? SandY + SandFillOverlap : SandY;
 
 		ApplyLayer(skyLayer, area.Position.X, area.Position.Y, area.Size.X, WaterSurfaceY - area.Position.Y, scrollX * 0.18f, SkySourceY);
-		ApplyLayer(waterLayer, area.Position.X, WaterSurfaceY, area.Size.X, SandY - WaterSurfaceY, scrollX, WaterSourceY);
-		ApplyLayer(sandLayer, area.Position.X, SandY, area.Size.X, area.End.Y - SandY, scrollX * 0.45f, 0f);
-		ApplyLayer(waterSurfaceLayer, area.Position.X, surfaceTop, area.Size.X, SurfaceStripHeight, scrollX * 0.72f, WaterSurfaceSourceY);
-		UpdateDecorations(area, center, WaterSurfaceY, SandY);
+		ApplyLayer(waterLayer, area.Position.X, WaterSurfaceY, area.Size.X, SandY - WaterSurfaceY + SandFillOverlap, scrollX, WaterSourceY);
+		ApplyLayer(sandFillLayer, area.Position.X, sandFillTop, area.Size.X, area.End.Y - sandFillTop, area.Position.X, 0f);
+		ApplyLayer(sandEdgeLayer, area.Position.X, SandY - SandEdgeOriginY, area.Size.X, sandEdgeTexture?.GetHeight() ?? 1f, area.Position.X, 0f);
+		ApplyLayer(waterSurfaceLayer, area.Position.X, WaterSurfaceY - WaterSurfaceOriginY, area.Size.X, SurfaceStripHeight, scrollX * 0.72f, 0f);
+		UpdateDecorations(area, WaterSurfaceY, SandY);
 		UpdateSwimBounds();
 	}
 
@@ -274,16 +393,16 @@ public partial class LevelBackground : Node2D
 		float surfaceY = Mathf.Round(viewport.Y * ScreenWaterSurfaceRatio);
 		float sandY = Mathf.Round(viewport.Y * ScreenSandRatio);
 		float scrollX = time * 15f;
-		float surfaceOffset = Mathf.Clamp(viewport.Y * 0.12f, 64f, WaterSurfaceVisualOffset);
-		float surfaceHeight = Mathf.Clamp(viewport.Y * 0.27f, 150f, SurfaceStripHeight);
+		float sandFillTop = sandEdgeTexture != null ? sandY + SandFillOverlap : sandY;
 
 		Rect2 area = new Rect2(Vector2.Zero, viewport);
 
 		ApplyLayer(skyLayer, 0f, 0f, viewport.X, surfaceY, scrollX * 0.18f, SkySourceY);
-		ApplyLayer(waterLayer, 0f, surfaceY, viewport.X, sandY - surfaceY, scrollX, WaterSourceY + Mathf.Sin(time * 0.18f) * 8f);
-		ApplyLayer(sandLayer, 0f, sandY, viewport.X, viewport.Y - sandY, scrollX * 0.45f, 0f);
-		ApplyLayer(waterSurfaceLayer, 0f, surfaceY - surfaceOffset, viewport.X, surfaceHeight, scrollX * 0.72f, WaterSurfaceSourceY);
-		UpdateDecorations(area, viewport * 0.5f, surfaceY, sandY);
+		ApplyLayer(waterLayer, 0f, surfaceY, viewport.X, sandY - surfaceY + SandFillOverlap, scrollX, WaterSourceY + Mathf.Sin(time * 0.18f) * 8f);
+		ApplyLayer(sandFillLayer, 0f, sandFillTop, viewport.X, viewport.Y - sandFillTop, 0f, 0f);
+		ApplyLayer(sandEdgeLayer, 0f, sandY - SandEdgeOriginY, viewport.X, sandEdgeTexture?.GetHeight() ?? 1f, 0f, 0f);
+		ApplyLayer(waterSurfaceLayer, 0f, surfaceY - WaterSurfaceOriginY, viewport.X, SurfaceStripHeight, scrollX * 0.72f, 0f);
+		UpdateDecorations(area, surfaceY, sandY);
 	}
 
 	private void ApplyLayer(Sprite2D sprite, float x, float y, float width, float height, float sourceX, float sourceY)
@@ -303,7 +422,7 @@ public partial class LevelBackground : Node2D
 		);
 	}
 
-	private void UpdateDecorations(Rect2 area, Vector2 center, float waterSurfaceY, float sandY)
+	private void UpdateDecorations(Rect2 area, float waterSurfaceY, float sandY)
 	{
 		if (!EnableDecorations || decorationEntries.Count == 0)
 		{
@@ -314,16 +433,81 @@ public partial class LevelBackground : Node2D
 
 		decorationRoot.Visible = true;
 		int baseCycle = Mathf.FloorToInt(area.Position.X / DecorationRepeatWidth);
+		float waterDepth = Mathf.Max(260f, sandY - waterSurfaceY - 180f);
 
 		foreach (DecorationEntry entry in decorationEntries)
 		{
-			float x = (baseCycle + entry.CycleOffset) * DecorationRepeatWidth + entry.Spec.LocalX;
-			float y = entry.Spec.Anchor == DecorationAnchor.Sand
-				? sandY + entry.Spec.LocalY
-				: waterSurfaceY + entry.Spec.LocalY + Mathf.Sin(time * 0.45f + entry.Spec.LocalX * 0.01f) * 10f;
+			int chunk = baseCycle + entry.CycleOffset;
+			DecorationSpec spec = entry.Spec;
+			float chanceRoll = Hash01(chunk * 97 + entry.SpecIndex * 311);
 
-			entry.Sprite.Position = new Vector2(Mathf.Round(x), Mathf.Round(y));
+			if (chanceRoll > spec.Chance)
+			{
+				entry.Sprite.Visible = false;
+				continue;
+			}
+
+			entry.Sprite.Visible = true;
+			float jitter = (Hash01(chunk * 131 + entry.SpecIndex * 47) - 0.5f) * spec.JitterX;
+			float x = chunk * DecorationRepeatWidth + spec.LocalX + jitter;
+
+			if (spec.Anchor == DecorationAnchor.Bubble)
+			{
+				float phase = Hash01(chunk * 173 + entry.SpecIndex * 83) * waterDepth;
+				float travel = Mathf.PosMod(time * spec.BubbleSpeed + phase, waterDepth);
+				float wobble = Mathf.Sin(time * 1.1f + chunk + entry.SpecIndex) * 12f;
+				float y = sandY - 95f - travel;
+				entry.Sprite.Position = new Vector2(Mathf.Round(x + wobble), Mathf.Round(y));
+				continue;
+			}
+
+			float surfaceY = GetSandSurfaceY(x, sandY);
+			float visualHeight = Mathf.Max(1f, entry.TextureHeight);
+			float visibleBottomFromCenter = (visualHeight * 0.5f - entry.VisibleBottomInset) * spec.Scale;
+			float depthNudge = spec.Anchor == DecorationAnchor.SandBack ? 14f : 0f;
+			float yOnGround = surfaceY + spec.GroundOffset + depthNudge - visibleBottomFromCenter;
+			entry.Sprite.Position = new Vector2(Mathf.Round(x), Mathf.Round(yOnGround));
 		}
+	}
+
+	public float GetSandSurfaceYAt(float x)
+	{
+		return GetSandSurfaceY(x, SandY);
+	}
+
+	private float GetSandSurfaceY(float x, float sandBaseY)
+	{
+		if (sandEdgeTopPixels != null && sandEdgeTopPixels.Length > 0)
+		{
+			int textureX = Mathf.PosMod(Mathf.FloorToInt(x), sandEdgeTopPixels.Length);
+			return sandBaseY - SandEdgeOriginY + sandEdgeTopPixels[textureX];
+		}
+
+		float t = x / DecorationRepeatWidth * Mathf.Tau;
+		return sandBaseY +
+			Mathf.Sin(t + 0.4f) * SandWaveA +
+			Mathf.Sin(t * 2f + 2.1f) * SandWaveB +
+			Mathf.Sin(t * 4f + 1.2f) * SandWaveC;
+	}
+
+	public static float GetFallbackSandSurfaceY(float x, float sandBaseY)
+	{
+		float t = x / DecorationRepeatWidth * Mathf.Tau;
+		return sandBaseY +
+			Mathf.Sin(t + 0.4f) * SandWaveA +
+			Mathf.Sin(t * 2f + 2.1f) * SandWaveB +
+			Mathf.Sin(t * 4f + 1.2f) * SandWaveC;
+	}
+
+	private float Hash01(int seed)
+	{
+		uint value = (uint)seed;
+		value ^= value >> 16;
+		value *= 0x7feb352dU;
+		value ^= value >> 15;
+		value *= 0x846ca68bU;
+		value ^= value >> 16;
+		return (value & 0x00ffffff) / 16777215f;
 	}
 
 	private void EnsureSwimBounds(Node2D target)
@@ -347,22 +531,29 @@ public partial class LevelBackground : Node2D
 			EnsureSwimBounds(player);
 	}
 
-	private Texture2D LoadTexture(string path)
+	private Texture2D LoadFirstTexture(string[] paths)
 	{
-		Texture2D texture = ResourceLoader.Load<Texture2D>(path);
+		string path = GetFirstExistingPath(paths);
+		Texture2D texture = path == "" ? null : ResourceLoader.Load<Texture2D>(path);
 
 		if (texture == null)
-			GD.PushWarning($"Level background texture missing: {path}");
+			GD.PushWarning($"Level background texture missing: {string.Join(", ", paths)}");
 
 		return texture;
 	}
 
-	private Texture2D LoadTextureWithCheckerTransparency(string path, int preserveRadius)
+	private Texture2D LoadFirstTextureWithCheckerTransparency(string[] paths, int preserveRadius)
 	{
-		if (keyedTextureCache.TryGetValue(path, out Texture2D cachedTexture))
+		string path = GetFirstExistingPath(paths);
+
+		if (path == "")
+			return LoadFirstTexture(paths);
+
+		string cacheKey = $"{path}:{preserveRadius}";
+		if (keyedTextureCache.TryGetValue(cacheKey, out Texture2D cachedTexture))
 			return cachedTexture;
 
-		Texture2D sourceTexture = LoadTexture(path);
+		Texture2D sourceTexture = ResourceLoader.Load<Texture2D>(path);
 		Image image = sourceTexture?.GetImage();
 
 		if (image == null || image.IsEmpty())
@@ -373,14 +564,28 @@ public partial class LevelBackground : Node2D
 
 		RemoveCheckerBackground(image, preserveRadius);
 		Texture2D texture = ImageTexture.CreateFromImage(image);
-		keyedTextureCache[path] = texture;
+		keyedTextureCache[cacheKey] = texture;
 		return texture;
+	}
+
+	private string GetFirstExistingPath(string[] paths)
+	{
+		foreach (string path in paths)
+		{
+			if (ResourceLoader.Exists(path))
+				return path;
+		}
+
+		return "";
 	}
 
 	private void RemoveCheckerBackground(Image image, int preserveRadius)
 	{
 		int width = image.GetWidth();
 		int height = image.GetHeight();
+
+		if (HasUsefulAlpha(image, width, height))
+			return;
 
 		if (preserveRadius < 0)
 		{
@@ -393,10 +598,7 @@ public partial class LevelBackground : Node2D
 		for (int y = 0; y < height; y++)
 		{
 			for (int x = 0; x < width; x++)
-			{
-				Color color = image.GetPixel(x, y);
-				objectMask[y * width + x] = !IsCheckerPixel(color);
-			}
+				objectMask[y * width + x] = !IsCheckerPixel(image.GetPixel(x, y));
 		}
 
 		bool[] preservedCheckerPixels = DilateMask(objectMask, width, height, preserveRadius);
@@ -407,15 +609,24 @@ public partial class LevelBackground : Node2D
 			{
 				int index = y * width + x;
 				Color color = image.GetPixel(x, y);
-
-				if (IsCheckerPixel(color) && !preservedCheckerPixels[index])
-					color.A = 0f;
-				else
-					color.A = 1f;
-
+				color.A = IsCheckerPixel(color) && !preservedCheckerPixels[index] ? 0f : 1f;
 				image.SetPixel(x, y, color);
 			}
 		}
+	}
+
+	private bool HasUsefulAlpha(Image image, int width, int height)
+	{
+		for (int y = 0; y < height; y += 6)
+		{
+			for (int x = 0; x < width; x += 6)
+			{
+				if (image.GetPixel(x, y).A < 0.92f)
+					return true;
+			}
+		}
+
+		return false;
 	}
 
 	private void RemoveEdgeConnectedCheckerBackground(Image image, int width, int height)
@@ -463,14 +674,7 @@ public partial class LevelBackground : Node2D
 		}
 	}
 
-	private void QueueCheckerPixel(
-		Image image,
-		bool[] backgroundMask,
-		Queue<int> pending,
-		int x,
-		int y,
-		int width
-	)
+	private void QueueCheckerPixel(Image image, bool[] backgroundMask, Queue<int> pending, int x, int y, int width)
 	{
 		int index = y * width + x;
 
@@ -525,7 +729,7 @@ public partial class LevelBackground : Node2D
 		float minChannel = Mathf.Min(color.R, Mathf.Min(color.G, color.B));
 		float saturation = maxChannel - minChannel;
 
-		return maxChannel > 0.82f && saturation < 0.06f;
+		return maxChannel > 0.82f && saturation < 0.075f;
 	}
 
 	private Vector2 GetWorldViewCenter()
