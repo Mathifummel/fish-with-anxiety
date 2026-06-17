@@ -11,6 +11,7 @@ public partial class Leaderboard : Control
 
 	public override void _Ready()
 	{
+		GameAudio.EnsureMenuMusic(this);
 		BuildLayout();
 		LoadLeaderboard();
 		GameUi.FocusFirstButton(this);

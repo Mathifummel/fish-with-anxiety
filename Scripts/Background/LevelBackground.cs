@@ -10,7 +10,7 @@ public partial class LevelBackground : Node2D
 	}
 
 	public const float WATER_SURFACE_Y = -80f;
-	public const float SAND_Y = 760f;
+	public const float SAND_Y = 840f;
 	public const float WATER_SURFACE_STRIP_HEIGHT = 724f;
 	public const float PLAYER_SURFACE_PADDING = 38f;
 	public const float PLAYER_SAND_PADDING = 36f;
@@ -25,7 +25,7 @@ public partial class LevelBackground : Node2D
 	private static readonly string[] DecorationTexturePaths = { "res://Assets/decoration_pack.png", "res://Assets/Detailpack1.png" };
 
 	private const float ScreenWaterSurfaceRatio = 0.30f;
-	private const float ScreenSandRatio = 0.86f;
+	private const float ScreenSandRatio = 0.89f;
 	private const float SkySourceY = 260f;
 	private const float WaterSourceY = 0f;
 	private const float WaterSurfaceOriginY = 355f;

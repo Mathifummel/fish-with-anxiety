@@ -17,6 +17,8 @@ public partial class PlayerFish : CharacterBody2D
 	public const string CustomMoveLeft = "custom_move_left";
 	public const string CustomMoveRight = "custom_move_right";
 	public const string CustomBoost = "custom_boost";
+	public const string CustomUseItem = "custom_use_item";
+	public const string UseItemAction = "use_item";
 
 	private const string ControlsSavePath = "user://control_settings.cfg";
 	private const string ControlsSection = "controls";
@@ -104,6 +106,7 @@ public partial class PlayerFish : CharacterBody2D
 	private Texture2D[] rightSwimFrames;
 	private Texture2D[] drunkSwimFrames;
 	private int facingDirection = 1;
+	private bool selectedSkinUsesMirroredFrames = false;
 
 	// smoother movement
 	private Vector2 currentVelocity = Vector2.Zero;
@@ -126,6 +129,7 @@ public partial class PlayerFish : CharacterBody2D
 			ResourceLoader.Load<Texture2D>("res://Assets/Bessofenerfisch1.png"),
 			ResourceLoader.Load<Texture2D>("res://Assets/Besoffenerfisch2.png")
 		};
+		ApplySelectedSkinFrames();
 		GameUi.EnsureInputDefaults();
 		LoadControlSettings();
 	}
@@ -414,7 +418,34 @@ public partial class PlayerFish : CharacterBody2D
 		if (texture != null && fishSprite.Texture != texture)
 			fishSprite.Texture = texture;
 
-		fishSprite.FlipH = useDrunkFrames && facingDirection > 0;
+		fishSprite.FlipH = useDrunkFrames
+			? facingDirection > 0
+			: selectedSkinUsesMirroredFrames && facingDirection > 0;
+	}
+
+	private void ApplySelectedSkinFrames()
+	{
+		ScoreManager scoreManager = GetNodeOrNull<ScoreManager>("/root/ScoreManager");
+		if (scoreManager == null ||
+			scoreManager.SelectedSkinId == ShopCatalog.DefaultSkinId)
+		{
+			selectedSkinUsesMirroredFrames = false;
+			return;
+		}
+
+		SkinDefinition skin = ShopCatalog.GetSkin(scoreManager.SelectedSkinId);
+		if (skin == null)
+			return;
+
+		Texture2D frame1 = ResourceLoader.Load<Texture2D>(skin.Frame1Path);
+		Texture2D frame2 = ResourceLoader.Load<Texture2D>(skin.Frame2Path);
+		if (frame1 == null || frame2 == null)
+			return;
+
+		leftSwimFrames = new Texture2D[] { frame1, frame2 };
+		rightSwimFrames = leftSwimFrames;
+		selectedSkinUsesMirroredFrames = true;
+		UpdateSwimFrame();
 	}
 
 	// =========================================
@@ -539,6 +570,20 @@ public partial class PlayerFish : CharacterBody2D
 		return false;
 	}
 
+	public static bool IsUseItemJustPressed()
+	{
+		GameUi.EnsureInputDefaults();
+		EnsureCustomInputDefaults();
+
+		if (Input.IsActionJustPressed(UseItemAction))
+			return true;
+
+		if (CurrentControlScheme == ControlScheme.Custom)
+			return Input.IsActionJustPressed(CustomUseItem);
+
+		return false;
+	}
+
 	public static void EnsureCustomInputDefaults()
 	{
 		EnsureAction(CustomMoveUp, Key.W);
@@ -546,6 +591,7 @@ public partial class PlayerFish : CharacterBody2D
 		EnsureAction(CustomMoveLeft, Key.A);
 		EnsureAction(CustomMoveRight, Key.D);
 		EnsureAction(CustomBoost, Key.Space);
+		EnsureAction(CustomUseItem, Key.P);
 	}
 
 	public static void SetCustomInput(string action, InputEvent inputEvent)
@@ -609,6 +655,7 @@ public partial class PlayerFish : CharacterBody2D
 		LoadAction(config, CustomMoveLeft);
 		LoadAction(config, CustomMoveRight);
 		LoadAction(config, CustomBoost);
+		LoadAction(config, CustomUseItem);
 	}
 
 	public static void SaveControlSettings()
@@ -623,6 +670,7 @@ public partial class PlayerFish : CharacterBody2D
 		SaveAction(config, CustomMoveLeft);
 		SaveAction(config, CustomMoveRight);
 		SaveAction(config, CustomBoost);
+		SaveAction(config, CustomUseItem);
 
 		config.Save(ControlsSavePath);
 	}

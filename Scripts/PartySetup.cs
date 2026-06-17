@@ -22,6 +22,7 @@ public partial class PartySetup : Control
 
 	public override void _Ready()
 	{
+		GameAudio.EnsureMenuMusic(this);
 		SetAnchorsPreset(LayoutPreset.FullRect);
 		BuildBackground();
 		BuildPanel();

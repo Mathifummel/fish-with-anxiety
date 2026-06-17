@@ -68,10 +68,6 @@ text = "Leaderboard"
 layout_mode = 2
 text = "Tutorial"
 
-[node name="Shop" type="Button" parent="UI/PanelLeft/VBoxContainer"]
-layout_mode = 2
-text = "Shop"
-
 [node name="Einstellungen" type="Button" parent="UI/PanelLeft/VBoxContainer"]
 layout_mode = 2
 text = "Einstellungen"

@@ -65,12 +65,13 @@ public partial class Main : Node2D
 	[Export] public float DespawnDistance = 1900f;
 	[Export] public float MinSpawnSpacing = 170f;
 	[Export] public float SpawnWaterBoundaryMargin = 145f;
-	[Export] public float SpawnWaterTopMargin = 420f;
-	[Export] public float SpawnWaterBottomMargin = 125f;
+	[Export] public float SpawnWaterTopMargin = 500f;
+	[Export] public float SpawnWaterBottomMargin = 115f;
 	[Export] public float SpawnOutOfSightMargin = 135f;
 	[Export] public int MaxSpawnAttempts = 80;
 	[Export] public float SpawnCheckInterval = 0.35f;
 	[Export] public float SpawnMovementStep = 260f;
+	[Export] public float InitialPlayerSpawnY = 360f;
 
 	[Export] public int InitialNPCCount = 2;
 	[Export] public int InitialPassiveFishCount = 5;
@@ -177,10 +178,18 @@ public partial class Main : Node2D
 	private float crossingWarningCooldownTimer = 0f;
 	private Texture2D crossingWarningTexture;
 	private OceanMapBackground backgroundMap;
+	private AudioStreamPlayer stressWarningPlayer;
+	private AudioStreamPlayer alcoholMusicPlayer;
 	private bool gameOverTriggered = false;
+	private int extraLifeCharges = 0;
+	private int alcoholStartItemCharges = 0;
+	private int chorusStartItemCharges = 0;
 	private string pendingPauseCustomAction = "";
 	private float pauseConfirmationTimer = 0f;
 	private float controllerNoticeTimer = 0f;
+	private float fishBubbleTimer = 0f;
+	private float jellyfishSoundTimer = 0f;
+	private float stressWarningCooldown = 0f;
 
 	private StyleBoxFlat stressFillStyle;
 	private StyleBoxFlat stressBackgroundStyle;
@@ -202,8 +211,10 @@ public partial class Main : Node2D
 
 	public override void _Ready()
 	{
+		GameAudio.StopMenuMusic(this);
 		AddToGroup("game_main");
 		CreateBackgroundLayer();
+		CreateAudioPlayers();
 
 		StressBar = GetNode<ProgressBar>("UI/StressBar");
 		ScoreLabel = GetNode<Label>("UI/ScoreLabel");
@@ -238,8 +249,10 @@ public partial class Main : Node2D
 	{
 		sm.Reset();
 		sm.ClearRevivalState();
+		sm.RegisterRunStarted();
 
 		countdownTimer = CountdownDuration;
+		Player.GlobalPosition = ClampToWaterBounds(new Vector2(0f, InitialPlayerSpawnY), 120f);
 		lastStreamPosition = Player.Position;
 		Player.SetPhysicsProcess(false);
 		gameOverTriggered = false;
@@ -248,6 +261,7 @@ public partial class Main : Node2D
 		Stress = 0f;
 		invincibilityTimer = 0f;
 		alcoholFishTimeBonuses = 0;
+		PrepareStartItems(sm);
 		itemHintTimer = 0f;
 		ClearCrossingWarnings();
 		ResetItemHintCooldown();
@@ -256,6 +270,7 @@ public partial class Main : Node2D
 		PauseButton?.Hide();
 
 		SpawnInitialWorld();
+		GameAudio.PlayOneShot(this, GameAudio.CountdownPath, -5f);
 	}
 
 	private void SetupRevivedRun(ScoreManager sm)
@@ -270,6 +285,9 @@ public partial class Main : Node2D
 		Stress = Mathf.Clamp(sm.SavedStress, 0f, 85f);
 		invincibilityTimer = 0f;
 		alcoholFishTimeBonuses = 0;
+		extraLifeCharges = 0;
+		alcoholStartItemCharges = 0;
+		chorusStartItemCharges = 0;
 		Player.CurrentStress = Stress;
 		StressBar.Value = Stress;
 		Player.GlobalPosition = sm.SavedPlayerPosition;
@@ -348,6 +366,7 @@ public partial class Main : Node2D
 		{
 			SyncConnectedJoypads();
 			UpdateControllerNotice(dt);
+			UpdateGameplayAudio(dt);
 		}
 
 		if (gamePaused)
@@ -380,6 +399,7 @@ public partial class Main : Node2D
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 
+		TryUseStartItemInput();
 		ScoreLabel.Text = $"Score: {sm.CurrentScore}";
 		CoinLabel.Text = $"Münzen: {sm.CoinsThisRun}";
 		UpdateDifficulty(sm.CurrentScore);
@@ -398,6 +418,205 @@ public partial class Main : Node2D
 		backgroundMap.ConfigureForWorld(Player);
 		AddChild(backgroundMap);
 		MoveChild(backgroundMap, 0);
+	}
+
+	private void CreateAudioPlayers()
+	{
+		stressWarningPlayer = GameAudio.CreatePlayer(
+			this,
+			"StressWarning",
+			GameAudio.StressWarningPath,
+			-13f,
+			false
+		);
+		alcoholMusicPlayer = GameAudio.CreateLoopPlayer(
+			this,
+			"AlcoholSamba",
+			GameAudio.SambaMusicPath,
+			-7f,
+			65f,
+			false
+		);
+	}
+
+	private void UpdateGameplayAudio(float dt)
+	{
+		if (MenuPreviewMode)
+			return;
+
+		bool active = gameStarted && !gamePaused && !gameOverTriggered;
+
+		if (!active)
+		{
+			StopStressWarningAudio();
+			GameAudio.StopPlayer(alcoholMusicPlayer);
+
+			return;
+		}
+
+		UpdateFishBubbleAudio(dt);
+		UpdateStressAudio(dt);
+		UpdateAlcoholMusic();
+		UpdateJellyfishAudio(dt);
+	}
+
+	private void UpdateFishBubbleAudio(float dt)
+	{
+		fishBubbleTimer -= dt;
+
+		if (fishBubbleTimer > 0f)
+			return;
+
+		fishBubbleTimer = (float)GD.RandRange(0.72f, 1.85f);
+		Node2D source = PickBubbleSource();
+
+		if (source == null)
+			return;
+
+		GameAudio.PlayRandomBubble(
+			this,
+			source.GlobalPosition,
+			(float)GD.RandRange(-18.5f, -12.5f),
+			(float)GD.RandRange(0.86f, 1.16f)
+		);
+	}
+
+	private Node2D PickBubbleSource()
+	{
+		if (Player == null)
+			return null;
+
+		List<Node2D> sources = new List<Node2D> { Player };
+		AddNearbyBubbleSources(sources, NPCContainer, 920f);
+		AddNearbyBubbleSources(sources, PassiveFishContainer, 920f);
+		AddNearbyBubbleSources(sources, JellyfishContainer, 760f);
+
+		return sources[(int)(GD.Randi() % sources.Count)];
+	}
+
+	private void AddNearbyBubbleSources(List<Node2D> sources, Node container, float maxDistance)
+	{
+		if (container == null || Player == null)
+			return;
+
+		float maxDistanceSquared = maxDistance * maxDistance;
+
+		foreach (Node child in container.GetChildren())
+		{
+			if (child is Node2D node &&
+				!node.IsQueuedForDeletion() &&
+				node.GlobalPosition.DistanceSquaredTo(Player.GlobalPosition) <= maxDistanceSquared)
+			{
+				sources.Add(node);
+			}
+		}
+	}
+
+	private void UpdateStressAudio(float dt)
+	{
+		if (stressWarningPlayer == null)
+			return;
+
+		stressWarningCooldown = Mathf.Max(0f, stressWarningCooldown - dt);
+
+		if (Stress < 68f || stressWarningCooldown > 0f || stressWarningPlayer.Playing)
+			return;
+
+		float pressure = Mathf.Clamp((Stress - 68f) / 28f, 0f, 1f);
+		stressWarningPlayer.VolumeDb = Mathf.Lerp(-16.5f, -8.5f, pressure);
+		stressWarningPlayer.PitchScale = Mathf.Lerp(0.96f, 1.02f, pressure);
+		stressWarningPlayer.Play();
+		stressWarningCooldown = Mathf.Lerp(3.8f, 1.45f, pressure);
+	}
+
+	private void StopStressWarningAudio()
+	{
+		if (stressWarningPlayer == null)
+			return;
+
+		GameAudio.StopPlayer(stressWarningPlayer);
+		stressWarningCooldown = 1.25f;
+	}
+
+	private void FinishStressAudioBeforeDeath()
+	{
+		if (stressWarningPlayer == null)
+			return;
+
+		if (stressWarningPlayer.Playing)
+		{
+			stressWarningPlayer.VolumeDb = -80f;
+			stressWarningPlayer.Stop();
+		}
+
+		stressWarningCooldown = 999f;
+	}
+
+	private void UpdateAlcoholMusic()
+	{
+		if (alcoholMusicPlayer == null)
+			return;
+
+		bool shouldPlay = invincibilityTimer > 0f && Player != null && Player.IsInvincible;
+
+		if (shouldPlay)
+		{
+			if (!alcoholMusicPlayer.Playing)
+				alcoholMusicPlayer.Play(65f);
+
+			alcoholMusicPlayer.VolumeDb = -7f;
+			return;
+		}
+
+		GameAudio.StopPlayer(alcoholMusicPlayer);
+	}
+
+	private void UpdateJellyfishAudio(float dt)
+	{
+		jellyfishSoundTimer -= dt;
+
+		if (jellyfishSoundTimer > 0f ||
+			JellyfishContainer == null ||
+			Player == null)
+		{
+			return;
+		}
+
+		Jellyfish nearest = null;
+		float nearestDistanceSquared = 460f * 460f;
+
+		foreach (Node child in JellyfishContainer.GetChildren())
+		{
+			if (child is not Jellyfish jellyfish || jellyfish.IsQueuedForDeletion())
+				continue;
+
+			float distanceSquared = jellyfish.GlobalPosition.DistanceSquaredTo(Player.GlobalPosition);
+
+			if (distanceSquared >= nearestDistanceSquared)
+				continue;
+
+			nearestDistanceSquared = distanceSquared;
+			nearest = jellyfish;
+		}
+
+		if (nearest == null)
+			return;
+
+		jellyfishSoundTimer = (float)GD.RandRange(1.7f, 3.2f);
+		GameAudio.PlaySpatialOneShot(
+			this,
+			GameAudio.JellyfishPath,
+			nearest.GlobalPosition,
+			-9.5f,
+			(float)GD.RandRange(0.92f, 1.08f),
+			900f
+		);
+	}
+
+	private void StopGameplayAudio()
+	{
+		StopStressWarningAudio();
+		GameAudio.StopPlayer(alcoholMusicPlayer);
 	}
 
 	private void SetupUi()
@@ -543,6 +762,7 @@ public partial class Main : Node2D
 		AddPauseCustomBindingButton("Links", PlayerFish.CustomMoveLeft);
 		AddPauseCustomBindingButton("Rechts", PlayerFish.CustomMoveRight);
 		AddPauseCustomBindingButton("Boost", PlayerFish.CustomBoost);
+		AddPauseCustomBindingButton("Item", PlayerFish.CustomUseItem);
 
 		PauseCaptureLabel = new Label();
 		PauseCaptureLabel.Text = "";
@@ -656,6 +876,8 @@ public partial class Main : Node2D
 			$"Rechts: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveRight)}";
 		pauseCustomButtons[PlayerFish.CustomBoost].Text =
 			$"Boost: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomBoost)}";
+		pauseCustomButtons[PlayerFish.CustomUseItem].Text =
+			$"Item: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomUseItem)}";
 	}
 
 	private string GetControlSchemeName(PlayerFish.ControlScheme scheme)
@@ -763,6 +985,7 @@ public partial class Main : Node2D
 	private void EndRunFromPause()
 	{
 		gamePaused = false;
+		extraLifeCharges = 0;
 		HidePauseMenu();
 		PauseButton?.Hide();
 		GameOver();
@@ -1602,6 +1825,49 @@ public partial class Main : Node2D
 		return true;
 	}
 
+	private void PrepareStartItems(ScoreManager sm)
+	{
+		extraLifeCharges = sm.TryConsumeStartItem(StartItemKind.ExtraHeart) ? 1 : 0;
+		alcoholStartItemCharges = sm.TryConsumeStartItem(StartItemKind.Alcohol) ? 1 : 0;
+		chorusStartItemCharges = sm.TryConsumeStartItem(StartItemKind.ChorusFruit) ? 1 : 0;
+
+		if (HasStartItemCharges())
+			ShowLevelNotice("Start-Items bereit");
+
+		UpdateItemEffectLabel();
+	}
+
+	private bool HasStartItemCharges()
+	{
+		return extraLifeCharges > 0 ||
+			alcoholStartItemCharges > 0 ||
+			chorusStartItemCharges > 0;
+	}
+
+	private void TryUseStartItemInput()
+	{
+		if (!PlayerFish.IsUseItemJustPressed())
+			return;
+
+		if (alcoholStartItemCharges > 0)
+		{
+			alcoholStartItemCharges--;
+			ApplyAlcoholEffect();
+			UpdateItemEffectLabel();
+			return;
+		}
+
+		if (chorusStartItemCharges > 0)
+		{
+			chorusStartItemCharges--;
+			ApplyChorusFruitEffect();
+			UpdateItemEffectLabel();
+			return;
+		}
+
+		ShowLevelNotice("Kein Start-Item bereit");
+	}
+
 	public void ApplyItem(ItemType type)
 	{
 		switch (type)
@@ -1620,6 +1886,7 @@ public partial class Main : Node2D
 
 	private void ApplyTrashEffect()
 	{
+		GetNode<ScoreManager>("/root/ScoreManager").RegisterTrashCollected();
 		Player.ApplySlow(TrashSlowMultiplier, TrashSlowDuration);
 		ShowLevelNotice("Müll: du schwimmst langsamer!");
 		UpdateItemEffectLabel();
@@ -1627,19 +1894,23 @@ public partial class Main : Node2D
 
 	private void ApplyAlcoholEffect()
 	{
+		GetNode<ScoreManager>("/root/ScoreManager").RegisterAlcoholUsed();
 		invincibilityTimer = Mathf.Max(invincibilityTimer, AlcoholDuration);
 		alcoholFishTimeBonuses = 0;
 		Player.SetInvincible(true);
 		Stress = 0f;
 		Player.CurrentStress = 0f;
 		StressBar.Value = 0f;
+		UpdateAlcoholMusic();
 		ShowLevelNotice("Alkohol: kurz unverwundbar!");
 		UpdateItemEffectLabel();
 	}
 
 	private void ApplyChorusFruitEffect()
 	{
+		GetNode<ScoreManager>("/root/ScoreManager").RegisterChorusUsed();
 		Player.GlobalPosition = FindChorusTeleportPosition();
+		GameAudio.PlayRandomBubble(this, Player.GlobalPosition, -5.5f, 1.24f);
 		Stress = Mathf.Min(Stress, 55f);
 		Player.CurrentStress = Stress;
 		StressBar.Value = Stress;
@@ -1719,6 +1990,7 @@ public partial class Main : Node2D
 				invincibilityTimer = 0f;
 				alcoholFishTimeBonuses = 0;
 				Player.SetInvincible(false);
+				GameAudio.StopPlayer(alcoholMusicPlayer);
 			}
 		}
 
@@ -1786,7 +2058,28 @@ public partial class Main : Node2D
 			return;
 		}
 
+		if (HasStartItemCharges())
+		{
+			ItemEffectLabel.Text = $"Start-Items: {FormatStartItems()}";
+			ItemEffectLabel.Show();
+			return;
+		}
+
 		ItemEffectLabel.Hide();
+	}
+
+	private string FormatStartItems()
+	{
+		List<string> parts = new List<string>();
+
+		if (extraLifeCharges > 0)
+			parts.Add($"Herz x{extraLifeCharges}");
+		if (alcoholStartItemCharges > 0)
+			parts.Add($"Alkohol x{alcoholStartItemCharges}");
+		if (chorusStartItemCharges > 0)
+			parts.Add($"Chorus x{chorusStartItemCharges}");
+
+		return string.Join("  ", parts);
 	}
 
 	private void UpdateItemDirectionHint(float dt)
@@ -2311,6 +2604,7 @@ public partial class Main : Node2D
 	private void SetDifficultyLevel(int level)
 	{
 		currentLevel = level;
+		GetNode<ScoreManager>("/root/ScoreManager").RegisterLevelReached(level);
 		ApplyLevelSettings(level, true);
 	}
 
@@ -2326,7 +2620,7 @@ public partial class Main : Node2D
 				MinSpawnSpacing = 170f;
 				SpawnCheckInterval = 0.32f;
 				SpawnMovementStep = 245f;
-				ApplySpeedMultiplier(1.03f, 1f, 1f);
+				ApplyLevelSpeedMultiplier(1.03f, 1f, 1f);
 				break;
 
 			case 2:
@@ -2337,7 +2631,7 @@ public partial class Main : Node2D
 				MinSpawnSpacing = 178f;
 				SpawnCheckInterval = 0.28f;
 				SpawnMovementStep = 230f;
-				ApplySpeedMultiplier(1.14f, 1.04f, 1.08f);
+				ApplyLevelSpeedMultiplier(1.14f, 1.04f, 1.08f);
 				break;
 
 			case 3:
@@ -2348,7 +2642,7 @@ public partial class Main : Node2D
 				MinSpawnSpacing = 188f;
 				SpawnCheckInterval = 0.24f;
 				SpawnMovementStep = 215f;
-				ApplySpeedMultiplier(1.28f, 1.08f, 1.16f);
+				ApplyLevelSpeedMultiplier(1.28f, 1.08f, 1.16f);
 				break;
 
 			case 4:
@@ -2359,7 +2653,7 @@ public partial class Main : Node2D
 				MinSpawnSpacing = 198f;
 				SpawnCheckInterval = 0.21f;
 				SpawnMovementStep = 200f;
-				ApplySpeedMultiplier(1.4f, 1.14f, 1.26f);
+				ApplyLevelSpeedMultiplier(1.4f, 1.14f, 1.26f);
 				break;
 
 			default:
@@ -2370,9 +2664,11 @@ public partial class Main : Node2D
 				MinSpawnSpacing = 196f;
 				SpawnCheckInterval = 0.19f;
 				SpawnMovementStep = 185f;
-				ApplySpeedMultiplier(1.53f, 1.2f, 1.36f);
+				ApplyLevelSpeedMultiplier(1.53f, 1.2f, 1.36f);
 				break;
 		}
+
+		ApplyDifficultyTuning();
 
 		if (level >= MinCrossingFishLevel && crossingIntervalTimer <= 0f)
 			ResetCrossingIntervalTimer(showNotice);
@@ -2380,11 +2676,31 @@ public partial class Main : Node2D
 		if (!showNotice)
 			return;
 
+		GameAudio.PlayLevelUp(this, level);
 		ShowLevelNotice($"Level {level} erreicht");
 		FillDifficultyTargets();
 
 		if (level >= 3)
 			ScheduleLevelSwarm(level - 1);
+	}
+
+	private void ApplyLevelSpeedMultiplier(float npc, float passive, float jellyfish)
+	{
+		ApplySpeedMultiplier(
+			npc * GameDifficultySettings.EnemySpeedMultiplier,
+			passive * GameDifficultySettings.PassiveSpeedMultiplier,
+			jellyfish * GameDifficultySettings.JellyfishSpeedMultiplier
+		);
+	}
+
+	private void ApplyDifficultyTuning()
+	{
+		TargetNPCCount = Mathf.Max(1, TargetNPCCount + GameDifficultySettings.NpcTargetOffset);
+		TargetJellyfishCount = Mathf.Max(0, TargetJellyfishCount + GameDifficultySettings.JellyfishTargetOffset);
+		TargetObstacleCount = Mathf.Max(3, TargetObstacleCount + GameDifficultySettings.ObstacleTargetOffset);
+		MinSpawnSpacing *= GameDifficultySettings.MinSpawnSpacingMultiplier;
+		SpawnCheckInterval *= GameDifficultySettings.SpawnCheckIntervalMultiplier;
+		SpawnMovementStep *= GameDifficultySettings.SpawnMovementStepMultiplier;
 	}
 
 	private void FillDifficultyTargets()
@@ -2661,13 +2977,16 @@ public partial class Main : Node2D
 
 		float stressMultiplier = Player.IsBoosting ? 0.5f : 1f;
 		float targetStress = Mathf.Clamp(
-			(threatPressure * StressTargetPerThreat * stressMultiplier) +
-			(contactPressure * ContactStressTargetBonus),
+			((threatPressure * StressTargetPerThreat * stressMultiplier) +
+			(contactPressure * ContactStressTargetBonus)) *
+			GameDifficultySettings.StressPressureMultiplier,
 			0f,
 			100f
 		);
 
-		float stressSpeed = targetStress > Stress ? StressGain : StressDecayFar;
+		float stressSpeed = targetStress > Stress
+			? StressGain * GameDifficultySettings.StressGainMultiplier
+			: StressDecayFar * GameDifficultySettings.StressDecayMultiplier;
 		Stress = Mathf.MoveToward(Stress, targetStress, stressSpeed * dt);
 
 		if (Player.IsBoosting)
@@ -2714,6 +3033,7 @@ public partial class Main : Node2D
 				continue;
 
 			sm.AddBonusScore(AlcoholFishBonusScore);
+			sm.RegisterPassiveFishBonus();
 
 			if (alcoholFishTimeBonuses < AlcoholFishTimeBonusLimit)
 			{
@@ -2722,6 +3042,7 @@ public partial class Main : Node2D
 			}
 
 			fish.QueueFree();
+			GameAudio.PlayRandomBubble(this, fish.GlobalPosition, -6f, 0.92f);
 			SpawnPassiveFish();
 			ShowLevelNotice($"+{AlcoholFishBonusScore} Fisch-Bonus");
 		}
@@ -2737,9 +3058,34 @@ public partial class Main : Node2D
 			stressFillStyle.BgColor = new Color(1f, 0.34f, 0.31f);
 	}
 
+	private bool TryUseExtraLife()
+	{
+		if (!gameStarted || extraLifeCharges <= 0)
+			return false;
+
+		extraLifeCharges--;
+		GetNode<ScoreManager>("/root/ScoreManager").RegisterExtraLifeUsed();
+		Stress = 18f;
+		Player.CurrentStress = Stress;
+		StressBar.Value = Stress;
+		UpdateStressBarColor();
+		Player.GlobalPosition = FindChorusTeleportPosition();
+		lastStreamPosition = Player.Position;
+		invincibilityTimer = Mathf.Max(invincibilityTimer, 2.8f);
+		Player.SetInvincible(true);
+		ClearCrossingWarnings();
+		ShowLevelNotice("Extra Herz benutzt!");
+		UpdateItemEffectLabel();
+		GameUi.RumbleConnectedJoypads(0.25f, 0.8f, 0.22f);
+		return true;
+	}
+
 	private void GameOver()
 	{
 		if (gameOverTriggered)
+			return;
+
+		if (TryUseExtraLife())
 			return;
 
 		gameOverTriggered = true;
@@ -2767,6 +3113,8 @@ public partial class Main : Node2D
 		ClearCrossingWarnings();
 		HidePauseMenu();
 		PauseButton?.Hide();
+		FinishStressAudioBeforeDeath();
+		StopGameplayAudio();
 
 		SceneTransition.FadeToScene(
 			GetTree(),

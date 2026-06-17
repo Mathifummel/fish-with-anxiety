@@ -10,6 +10,8 @@ public partial class MainMenu : Control
 	private const string SettingsScenePath = "res://Scenes/Settings.tscn";
 	private const string CreditsScenePath = "res://Scenes/Credits.tscn";
 	private const string PartySetupScenePath = "res://Scenes/PartySetup.tscn";
+	private const string ShopScenePath = "res://Scenes/Shop.tscn";
+	private const string MissionsScenePath = "res://Scenes/Missions.tscn";
 
 	private const string BackgroundViewportPath = "Background/SubViewport";
 	private const string PanelLeftPath = "UI/PanelLeft";
@@ -18,17 +20,17 @@ public partial class MainMenu : Control
 	private const string MultiplayerButtonPath = "UI/PanelLeft/VBoxContainer/Multiplayer";
 	private const string LeaderboardButtonPath = "UI/PanelLeft/VBoxContainer/Leaderboard";
 	private const string TutorialButtonPath = "UI/PanelLeft/VBoxContainer/Tutorial";
-	private const string ShopButtonPath = "UI/PanelLeft/VBoxContainer/Shop";
 	private const string SettingsButtonPath = "UI/PanelLeft/VBoxContainer/Einstellungen";
 	private const string CreditsButtonPath = "UI/PanelLeft/VBoxContainer/Credits";
 	private const string QuitButtonPath = "UI/PanelLeft/VBoxContainer/Beenden";
 	private const string MenuLogoPath = "UI/GameLogo";
 	private const string GameLogoTexturePath = "res://Assets/Transparaentlogo.png";
+	private const string ShopIconTexturePath = "res://Assets/Generated/Buttons/shop_icon.png";
+	private const string MissionsIconTexturePath = "res://Assets/Generated/Buttons/missions_icon.png";
 
 	private const float HoverScale = 1.05f;
 	private const float HoverTweenDuration = 0.14f;
 	private const float MultiplayerNoticeDuration = 1.3f;
-	private const float ShopNoticeDuration = 1.15f;
 	private const float ControllerNoticeDuration = 3.8f;
 
 	private readonly List<Button> menuButtons = new List<Button>();
@@ -37,45 +39,37 @@ public partial class MainMenu : Control
 
 	private SubViewport backgroundViewport;
 	private Button multiplayerButton;
-	private Button shopButton;
 	private TextureRect gameLogo;
 	private Panel controllerNoticePanel;
 	private TextureRect controllerNoticeImage;
 	private Label controllerNoticeTitle;
 	private Label controllerNoticeName;
 	private ControllerHintBar controllerHintBar;
+	private ButtonGroup difficultyButtonGroup;
 	private float multiplayerNoticeTimer = 0f;
-	private float shopNoticeTimer = 0f;
 	private float controllerNoticeTimer = 0f;
+	private readonly Dictionary<GameDifficulty, Button> difficultyButtons =
+		new Dictionary<GameDifficulty, Button>();
 
 	public override void _Ready()
 	{
 		SetupBackgroundGameplay();
+		StartMenuMusic();
 		SetupGlassPanel();
 		SetupGameLogo();
 		CreateControllerNotice();
 		CreateControllerHints();
+		CreateRightIconButtons();
 		ConnectButton(ClassicButtonPath, StartClassic);
 		ConnectButton(MultiplayerButtonPath, StartMultiplayer);
 		ConnectButton(LeaderboardButtonPath, OpenLeaderboard);
 		ConnectButton(TutorialButtonPath, OpenTutorial);
-		ConnectButton(ShopButtonPath, OpenShop);
 		ConnectButton(SettingsButtonPath, OpenSettings);
 		ConnectButton(CreditsButtonPath, OpenCredits);
 		ConnectButton(QuitButtonPath, QuitGame);
+		SetupDifficultySelector();
 
 		multiplayerButton = GetNodeOrNull<Button>(MultiplayerButtonPath);
-		shopButton = GetNodeOrNull<Button>(ShopButtonPath);
-		if (shopButton != null)
-		{
-			Texture2D shopTexture = ResourceLoader.Load<Texture2D>("res://Assets/Shop.png");
-			if (shopTexture != null)
-			{
-				shopButton.Icon = shopTexture;
-				shopButton.ExpandIcon = true;
-				shopButton.IconAlignment = HorizontalAlignment.Left;
-			}
-		}
 		CallDeferred(nameof(RefreshButtonPivots));
 		GameUi.FocusFirstButton(this);
 		SyncConnectedJoypads();
@@ -95,8 +89,6 @@ public partial class MainMenu : Control
 			if (multiplayerNoticeTimer <= 0f)
 				multiplayerButton.Text = "2-Spieler Modus";
 		}
-
-		UpdateShopNotice(dt);
 	}
 
 	public override void _Notification(int what)
@@ -132,11 +124,12 @@ public partial class MainMenu : Control
 
 	public void OpenShop()
 	{
-		if (shopButton == null)
-			return;
+		ChangeScene(ShopScenePath);
+	}
 
-		shopButton.Text = "Shop kommt bald";
-		shopNoticeTimer = ShopNoticeDuration;
+	public void OpenMissions()
+	{
+		ChangeScene(MissionsScenePath);
 	}
 
 	public void OpenSettings()
@@ -171,6 +164,11 @@ public partial class MainMenu : Control
 		backgroundViewport.AddChild(titleBackdrop);
 	}
 
+	private void StartMenuMusic()
+	{
+		GameAudio.EnsureMenuMusic(this);
+	}
+
 	private void ResizeBackgroundViewport()
 	{
 		if (backgroundViewport == null)
@@ -198,10 +196,78 @@ public partial class MainMenu : Control
 		}
 
 		panel.CustomMinimumSize = new Vector2(316, 0);
+		panel.OffsetTop = -292f;
+		panel.OffsetBottom = 292f;
 		panel.AddThemeStyleboxOverride("panel", CreatePanelStyle());
 
 		if (menuBox != null)
 			menuBox.AddThemeConstantOverride("separation", 12);
+	}
+
+	private void SetupDifficultySelector()
+	{
+		VBoxContainer menuBox = GetNodeOrNull<VBoxContainer>(MenuBoxPath);
+		if (menuBox == null || menuBox.GetNodeOrNull("DifficultySelector") != null)
+			return;
+
+		VBoxContainer selector = new VBoxContainer();
+		selector.Name = "DifficultySelector";
+		selector.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		selector.AddThemeConstantOverride("separation", 5);
+
+		Label label = new Label();
+		label.Text = "Schwierigkeit";
+		label.HorizontalAlignment = HorizontalAlignment.Center;
+		GameUi.ApplyLabel(label, 13, new Color(0.78f, 0.96f, 1f, 0.9f));
+		selector.AddChild(label);
+
+		HBoxContainer row = new HBoxContainer();
+		row.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		row.AddThemeConstantOverride("separation", 6);
+		selector.AddChild(row);
+
+		difficultyButtonGroup = new ButtonGroup();
+		row.AddChild(CreateDifficultyButton("Leicht", GameDifficulty.Easy));
+		row.AddChild(CreateDifficultyButton("Mittel", GameDifficulty.Medium));
+		row.AddChild(CreateDifficultyButton("Hart", GameDifficulty.Hard));
+
+		menuBox.AddChild(selector);
+		Button settingsButton = GetNodeOrNull<Button>(SettingsButtonPath);
+		if (settingsButton != null)
+			menuBox.MoveChild(selector, settingsButton.GetIndex());
+
+		RefreshDifficultyButtons();
+	}
+
+	private Button CreateDifficultyButton(string text, GameDifficulty difficulty)
+	{
+		Button button = new Button();
+		button.Text = text;
+		button.ToggleMode = true;
+		button.ButtonGroup = difficultyButtonGroup;
+		button.CustomMinimumSize = new Vector2(74f, 34f);
+		button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		button.FocusMode = FocusModeEnum.All;
+		GameUi.ApplyButton(button, 13);
+		button.Pressed += () =>
+		{
+			GameDifficultySettings.Current = difficulty;
+			GameAudio.PlayOneShot(this, GameAudio.UiButtonPath, -9f);
+			RefreshDifficultyButtons();
+		};
+		button.MouseEntered += () => AnimateButton(button, true);
+		button.MouseExited += () => AnimateButton(button, false);
+		button.Scale = Vector2.One;
+		button.Modulate = new Color(1f, 1f, 1f, 0.97f);
+		difficultyButtons[difficulty] = button;
+		menuButtons.Add(button);
+		return button;
+	}
+
+	private void RefreshDifficultyButtons()
+	{
+		foreach (var pair in difficultyButtons)
+			pair.Value.ButtonPressed = pair.Key == GameDifficultySettings.Current;
 	}
 
 	private void SetupGameLogo()
@@ -265,15 +331,84 @@ public partial class MainMenu : Control
 		gameLogo.CustomMinimumSize = gameLogo.Size;
 	}
 
-	private void UpdateShopNotice(float dt)
+	private void CreateRightIconButtons()
 	{
-		if (shopNoticeTimer <= 0f || shopButton == null)
+		CanvasLayer ui = GetNodeOrNull<CanvasLayer>("UI");
+		if (ui == null || ui.GetNodeOrNull("RightIconButtons") != null)
 			return;
 
-		shopNoticeTimer -= dt;
+		VBoxContainer bar = new VBoxContainer();
+		bar.Name = "RightIconButtons";
+		bar.AnchorLeft = 1f;
+		bar.AnchorTop = 0f;
+		bar.AnchorRight = 1f;
+		bar.AnchorBottom = 0f;
+		bar.OffsetLeft = -104f;
+		bar.OffsetTop = 30f;
+		bar.OffsetRight = -28f;
+		bar.OffsetBottom = 210f;
+		bar.Alignment = BoxContainer.AlignmentMode.Begin;
+		bar.AddThemeConstantOverride("separation", 12);
+		ui.AddChild(bar);
 
-		if (shopNoticeTimer <= 0f)
-			shopButton.Text = "Shop";
+		bar.AddChild(CreateIconMenuButton("Shop", ShopIconTexturePath, OpenShop));
+		bar.AddChild(CreateIconMenuButton("Missionen", MissionsIconTexturePath, OpenMissions));
+	}
+
+	private Button CreateIconMenuButton(string tooltip, string iconPath, Action handler)
+	{
+		Button button = new Button();
+		button.Text = "";
+		button.TooltipText = tooltip;
+		button.Icon = ResourceLoader.Load<Texture2D>(iconPath);
+		button.ExpandIcon = true;
+		button.IconAlignment = HorizontalAlignment.Center;
+		button.Alignment = HorizontalAlignment.Center;
+		button.CustomMinimumSize = new Vector2(76f, 76f);
+		button.FocusMode = FocusModeEnum.All;
+		ApplyIconButtonStyle(button);
+		button.Pressed += () => GameAudio.PlayOneShot(
+			this,
+			GameAudio.UiButtonPath,
+			-8f,
+			(float)GD.RandRange(0.96f, 1.04f)
+		);
+		button.Pressed += handler;
+		button.MouseEntered += () => AnimateButton(button, true);
+		button.MouseExited += () => AnimateButton(button, false);
+		button.Scale = Vector2.One;
+		button.Modulate = new Color(1f, 1f, 1f, 0.98f);
+		menuButtons.Add(button);
+		return button;
+	}
+
+	private void ApplyIconButtonStyle(Button button)
+	{
+		button.AddThemeStyleboxOverride("normal", CreateIconButtonStyle(0f, 0f));
+		button.AddThemeStyleboxOverride("hover", CreateIconButtonStyle(0.08f, 0.35f));
+		button.AddThemeStyleboxOverride("pressed", CreateIconButtonStyle(0.14f, 0.55f));
+		button.AddThemeStyleboxOverride("focus", CreateIconButtonStyle(0.2f, 0.8f));
+		button.AddThemeConstantOverride("h_separation", 0);
+	}
+
+	private StyleBoxFlat CreateIconButtonStyle(float backgroundAlpha, float borderAlpha)
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = new Color(1f, 1f, 1f, backgroundAlpha);
+		style.BorderColor = new Color(0.82f, 0.96f, 1f, borderAlpha);
+		style.BorderWidthLeft = 2;
+		style.BorderWidthTop = 2;
+		style.BorderWidthRight = 2;
+		style.BorderWidthBottom = 2;
+		style.CornerRadiusTopLeft = 8;
+		style.CornerRadiusTopRight = 8;
+		style.CornerRadiusBottomLeft = 8;
+		style.CornerRadiusBottomRight = 8;
+		style.ContentMarginLeft = 2;
+		style.ContentMarginTop = 2;
+		style.ContentMarginRight = 2;
+		style.ContentMarginBottom = 2;
+		return style;
 	}
 
 	private void CreateControllerNotice()
@@ -467,6 +602,12 @@ public partial class MainMenu : Control
 			return;
 		}
 
+		button.Pressed += () => GameAudio.PlayOneShot(
+			this,
+			GameAudio.UiButtonPath,
+			-8f,
+			(float)GD.RandRange(0.96f, 1.04f)
+		);
 		button.Pressed += handler;
 		button.MouseEntered += () => AnimateButton(button, true);
 		button.MouseExited += () => AnimateButton(button, false);

@@ -14,6 +14,7 @@ public partial class Settings : Control
 
 	public override void _Ready()
 	{
+		GameAudio.EnsureMenuMusic(this);
 		PlayerFish.LoadControlSettings();
 		BuildUi();
 		UpdateModeButtonLabels();
@@ -125,6 +126,7 @@ public partial class Settings : Control
 		AddCustomBindingButton("Links", PlayerFish.CustomMoveLeft);
 		AddCustomBindingButton("Rechts", PlayerFish.CustomMoveRight);
 		AddCustomBindingButton("Boost", PlayerFish.CustomBoost);
+		AddCustomBindingButton("Item", PlayerFish.CustomUseItem);
 
 		captureLabel = CreateLabel("", 15, GameUi.AccentText);
 		captureLabel.HorizontalAlignment = HorizontalAlignment.Center;
@@ -225,6 +227,8 @@ public partial class Settings : Control
 			$"Rechts: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomMoveRight)}";
 		customButtons[PlayerFish.CustomBoost].Text =
 			$"Boost: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomBoost)}";
+		customButtons[PlayerFish.CustomUseItem].Text =
+			$"Item: {PlayerFish.GetCustomInputLabel(PlayerFish.CustomUseItem)}";
 	}
 
 	private void ResetCustomBindings()
@@ -234,6 +238,7 @@ public partial class Settings : Control
 		SetKey(PlayerFish.CustomMoveLeft, Key.A);
 		SetKey(PlayerFish.CustomMoveRight, Key.D);
 		SetKey(PlayerFish.CustomBoost, Key.Space);
+		SetKey(PlayerFish.CustomUseItem, Key.P);
 		PlayerFish.SaveControlSettings();
 		UpdateCustomButtonLabels();
 		UpdateStatus("Standard-Tasten wiederhergestellt");

@@ -15,6 +15,8 @@ public partial class PickupItem : Area2D
 			return;
 
 		Main main = GetTree().GetFirstNodeInGroup("game_main") as Main;
+		Vector2 pickupPosition = body is Node2D node ? node.GlobalPosition : GlobalPosition;
+		GameAudio.PlayItemPickup(this, Type, pickupPosition);
 		main?.ApplyItem(Type);
 		QueueFree();
 	}

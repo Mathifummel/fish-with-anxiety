@@ -6,6 +6,8 @@ public partial class SimpleMenuPage : Control
 
 	public override void _Ready()
 	{
+		GameAudio.EnsureMenuMusic(this);
+
 		OceanMapBackground mapBackground = new OceanMapBackground();
 		mapBackground.ConfigureForScreen();
 		AddChild(mapBackground);

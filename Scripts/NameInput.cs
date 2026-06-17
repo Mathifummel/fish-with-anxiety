@@ -30,6 +30,7 @@ public partial class NameInput : Control
 
 	public override void _Ready()
 	{
+		GameAudio.EnsureMenuMusic(this);
 		SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 		ClearSceneChildren();
 		BuildLayout();

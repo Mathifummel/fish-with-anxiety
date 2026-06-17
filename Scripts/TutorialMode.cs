@@ -49,13 +49,16 @@ public partial class TutorialMode : Node2D
 	private bool boostUsed = false;
 	private bool crossingFishSpawned = false;
 	private OceanMapBackground backgroundMap;
+	private AudioStreamPlayer alcoholMusicPlayer;
 
 	public override void _Ready()
 	{
+		GameAudio.StopMenuMusic(this);
 		PlayerFish.LoadControlSettings();
 		warningTexture =
 			ResourceLoader.Load<Texture2D>("res://Assets/exclamation_spritesheet_01.png");
 		CreateBackgroundLayer();
+		CreateAudioPlayers();
 		CreateTargetMarker();
 		CreateUi();
 
@@ -78,6 +81,7 @@ public partial class TutorialMode : Node2D
 		AnimateTargetMarker();
 		UpdateHintArrow();
 		UpdatePhase(dt);
+		UpdateTutorialAlcoholMusic();
 		UpdateUi();
 	}
 
@@ -503,6 +507,8 @@ public partial class TutorialMode : Node2D
 			Player.SetInvincible(false);
 			Player.SpeedMultiplier = 1f;
 		}
+
+		UpdateTutorialAlcoholMusic();
 	}
 
 	private void CreateBackgroundLayer()
@@ -511,6 +517,36 @@ public partial class TutorialMode : Node2D
 		backgroundMap.ConfigureForWorld(Player);
 		AddChild(backgroundMap);
 		MoveChild(backgroundMap, 0);
+	}
+
+	private void CreateAudioPlayers()
+	{
+		alcoholMusicPlayer = GameAudio.CreateLoopPlayer(
+			this,
+			"TutorialAlcoholSamba",
+			GameAudio.SambaMusicPath,
+			-7f,
+			65f,
+			false
+		);
+	}
+
+	private void UpdateTutorialAlcoholMusic()
+	{
+		if (alcoholMusicPlayer == null)
+			return;
+
+		bool shouldPlay = Player != null && Player.IsInvincible;
+
+		if (shouldPlay)
+		{
+			if (!alcoholMusicPlayer.Playing)
+				alcoholMusicPlayer.Play(65f);
+
+			return;
+		}
+
+		GameAudio.StopPlayer(alcoholMusicPlayer);
 	}
 
 	private void CreateTargetMarker()

@@ -147,8 +147,10 @@ public static class GameUi
 		EnsureKeyAction("ui_right", Key.Right);
 		EnsureKeyAction("ui_accept", Key.Enter);
 		EnsureKeyAction("ui_accept", Key.Space);
+		EnsureKeyAction(PlayerFish.UseItemAction, Key.P);
 		EnsureJoyButtonAction("ui_accept", JoyButton.A);
 		EnsureJoyButtonAction("ui_cancel", JoyButton.B);
+		EnsureJoyButtonAction(PlayerFish.UseItemAction, JoyButton.Y);
 		EnsureJoyButtonAction("ui_up", JoyButton.DpadUp);
 		EnsureJoyButtonAction("ui_down", JoyButton.DpadDown);
 		EnsureJoyButtonAction("ui_left", JoyButton.DpadLeft);

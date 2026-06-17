@@ -78,6 +78,7 @@ public partial class PartyMode : Control
 
 	public override void _Ready()
 	{
+		GameAudio.StopMenuMusic(this);
 		rng.Randomize();
 		singleGameMode = PartyState.SelectedGame != PartyState.GameSelection.Party;
 		totalRounds = singleGameMode ? 1 : Mathf.Clamp(PartyState.Rounds, 3, 10);
