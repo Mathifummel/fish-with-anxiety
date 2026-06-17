@@ -342,6 +342,7 @@ public partial class PartyFish : CharacterBody2D
 			boostCooldown = 1.15f;
 			maxBoostCooldown = boostCooldown;
 			currentBoostMultiplier = 2.15f;
+			GameAudio.PlayBoost(this);
 			return;
 		}
 
@@ -371,6 +372,7 @@ public partial class PartyFish : CharacterBody2D
 		boostElapsed = 0f;
 		boostCooldown = 1.5f;
 		maxBoostCooldown = boostCooldown;
+		GameAudio.PlayBoost(this);
 	}
 
 	private Vector2 GetKeyDirection(Key up, Key down, Key left, Key right)

@@ -161,7 +161,7 @@ public partial class ShopPage : Control
 	private Control CreateSkinCard(SkinDefinition skin)
 	{
 		PanelContainer card = new PanelContainer();
-		card.CustomMinimumSize = new Vector2(146f, 150f);
+		card.CustomMinimumSize = new Vector2(160f, 198f);
 		card.AddThemeStyleboxOverride("panel", CreateCardStyle());
 
 		VBoxContainer layout = new VBoxContainer();
@@ -169,12 +169,7 @@ public partial class ShopPage : Control
 		layout.AddThemeConstantOverride("separation", 5);
 		card.AddChild(layout);
 
-		TextureRect preview = new TextureRect();
-		preview.Texture = ResourceLoader.Load<Texture2D>(skin.Frame1Path);
-		preview.CustomMinimumSize = new Vector2(118f, 58f);
-		preview.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
-		preview.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
-		layout.AddChild(preview);
+		layout.AddChild(CreateSkinPreview(skin.Frame1Path, new Vector2(140f, 94f)));
 
 		Label name = CreateLabel(skin.DisplayName, 12, GameUi.LightText);
 		name.HorizontalAlignment = HorizontalAlignment.Center;
@@ -193,6 +188,17 @@ public partial class ShopPage : Control
 		layout.AddChild(action);
 
 		return card;
+	}
+
+	private TextureRect CreateSkinPreview(string texturePath, Vector2 size)
+	{
+		TextureRect preview = new TextureRect();
+		preview.Texture = ResourceLoader.Load<Texture2D>(texturePath);
+		preview.CustomMinimumSize = size;
+		preview.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		preview.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		preview.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		return preview;
 	}
 
 	private void EnsureSkinCardVisible(Control card)

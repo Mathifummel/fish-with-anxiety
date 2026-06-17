@@ -265,6 +265,7 @@ public partial class PlayerFish : CharacterBody2D
 			{
 				boostCooldownTimer = BoostCooldown;
 				StartBoostTimer();
+				GameAudio.PlayBoost(this);
 			}
 		}
 

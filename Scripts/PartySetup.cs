@@ -198,19 +198,14 @@ public partial class PartySetup : Control
 	private Control CreatePlayerSkinCard(SkinDefinition skin)
 	{
 		PanelContainer card = new PanelContainer();
-		card.CustomMinimumSize = new Vector2(178f, 136f);
+		card.CustomMinimumSize = new Vector2(188f, 190f);
 		card.AddThemeStyleboxOverride("panel", CreateCardStyle(PartyState.PlayerSkinId == skin.Id));
 
 		VBoxContainer layout = new VBoxContainer();
 		layout.AddThemeConstantOverride("separation", 5);
 		card.AddChild(layout);
 
-		TextureRect preview = new TextureRect();
-		preview.Texture = ResourceLoader.Load<Texture2D>(skin.Frame1Path);
-		preview.CustomMinimumSize = new Vector2(128f, 58f);
-		preview.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
-		preview.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
-		layout.AddChild(preview);
+		layout.AddChild(CreateSkinPreview(skin.Frame1Path, new Vector2(148f, 99f)));
 
 		Label name = CreateLabel(skin.DisplayName, 12, GameUi.LightText);
 		name.HorizontalAlignment = HorizontalAlignment.Center;
@@ -228,6 +223,17 @@ public partial class PartySetup : Control
 		layout.AddChild(select);
 
 		return card;
+	}
+
+	private TextureRect CreateSkinPreview(string texturePath, Vector2 size)
+	{
+		TextureRect preview = new TextureRect();
+		preview.Texture = ResourceLoader.Load<Texture2D>(texturePath);
+		preview.CustomMinimumSize = size;
+		preview.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		preview.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		preview.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		return preview;
 	}
 
 	private Control CreateOpponentRoster()

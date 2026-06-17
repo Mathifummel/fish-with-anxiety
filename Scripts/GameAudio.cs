@@ -4,9 +4,10 @@ using System.Collections.Generic;
 public static class GameAudio
 {
 	public const string MenuMusicPath = "res://Assets/Animal Crossing New Horizons  - Main Theme Song.wav";
-	public const string GameplayMusicPath = "res://Assets/Donkey Kong Country - Aquatic Ambience [Restored].wav";
+	public const string GameplayMusicPath = "res://Assets/Aquarium Park Act 1 - Sonic Colors (DS).wav";
 	public const string SambaMusicPath = "res://Assets/Sounds/samba_loud_start.wav";
 	public const string ChorusFruitTeleportPath = "res://Assets/Sonic Checkpoint SFX.wav";
+	public const string SpinDashPath = "res://Assets/Sonic Spin Dash - Sound Effect.wav";
 	public const string LevelUpWarioWarePath = "res://Assets/Speed Up and Level Up - WarioWare, Inc. Mega Microgames! (OST).wav";
 	public const string LevelUpTwistedPath = "res://Assets/Speed Up, Level Up - WarioWare Twisted! (OST).wav";
 	public const string LevelUpDiyPath = "res://Assets/D.I.Y. Shuffle ~ Speed Up! - WarioWare D.I.Y. Soundtrack.wav";
@@ -21,6 +22,7 @@ public static class GameAudio
 	private const string AudioSection = "audio";
 	private const float DefaultMusicVolume = 0.74f;
 	private const float DefaultSfxVolume = 0.86f;
+	private const float SpinDashSecondHalfStart = 1.835f;
 
 	private static readonly string[] levelUpPool =
 	{
@@ -202,6 +204,11 @@ public static class GameAudio
 	public static void PlayCountdown(Node context)
 	{
 		PlayOneShot(context, CountdownPath, -5f, 1.32f);
+	}
+
+	public static void PlayBoost(Node context)
+	{
+		PlayOneShot(context, SpinDashPath, -7f, 1f, SpinDashSecondHalfStart);
 	}
 
 	public static void PlayItemPickup(Node context, ItemType type, Vector2 globalPosition)

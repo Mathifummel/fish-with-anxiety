@@ -60,10 +60,14 @@ public partial class CreditsPage : Control
 		AddLabel(content, "Head of Helping - The Great Nick", 19, GameUi.LightText);
 		AddLabel(content, "Head of Truck Driving - (Johannes) Theodor Fritzen", 19, GameUi.LightText);
 		AddLabel(content, "Head of Tech Support - Laali", 19, GameUi.LightText);
+		AddLabel(content, "Head of OpenAI - ChatGPT", 19, GameUi.LightText);
+		AddLabel(content, "Head of Bridge Building - Milewski Production Ltd", 19, GameUi.LightText);
 
 		AddSpacer(content, 14f);
 		AddLabel(content, "Sound Credits", 24, new Color(0.98f, 0.9f, 0.34f));
 		AddLabel(content, "Animal Crossing New Horizons - Main Theme Song", 16, GameUi.LightText);
+		AddLabel(content, "Sonic Colors DS - Aquarium Park Act 1", 16, GameUi.LightText);
+		AddLabel(content, "Sonic Spin Dash - Sound Effect", 16, GameUi.LightText);
 		AddLabel(content, "Samba de Amigo - Samba de Janeiro", 16, GameUi.LightText);
 		AddLabel(content, "WarioWare D.I.Y. - D.I.Y. Shuffle ~ Speed Up!", 16, GameUi.LightText);
 		AddLabel(content, "WarioWare, Inc. Mega Microgames! - Speed Up and Level Up", 16, GameUi.LightText);
@@ -73,6 +77,9 @@ public partial class CreditsPage : Control
 		AddLabel(content, "Stresssoundeffekt - edited into short stress warning", 16, GameUi.LightText);
 		AddLabel(content, "Minecraft Menu Button Sound Effect", 16, GameUi.LightText);
 		AddLabel(content, "Friday Night Funkin - 3, 2, 1, GO! Sound Effect", 16, GameUi.LightText);
+
+		AddSpacer(content, 20f);
+		AddLabel(content, "Thanks for Playing Mr. Haueisen - Mathi, Jakob, Rodi and Vlad", 22, new Color(1f, 0.94f, 0.55f));
 	}
 
 	private void AddLabel(VBoxContainer content, string text, int size, Color color)

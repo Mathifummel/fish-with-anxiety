@@ -128,21 +128,51 @@ public static class ShopCatalog
 			)
 		};
 
-		AddPack(result, "skinpack1", "Skinpack 1", 8);
-		AddPack(result, "skinpack2", "Skinpack 2", 8);
+		AddPack(
+			result,
+			"skinpack1",
+			"Skinpack 1",
+			new string[]
+			{
+				"Blobfisch",
+				"Moorfisch",
+				"Lavafisch",
+				"Eisfisch",
+				"Piratenfisch",
+				"Koenigsfisch",
+				"Froschfisch",
+				"Skelettfisch"
+			}
+		);
+		AddPack(
+			result,
+			"skinpack2",
+			"Skinpack 2",
+			new string[]
+			{
+				"Astronautenfisch",
+				"Samurai-Fisch",
+				"Regenbogenfisch",
+				"Steampunk-Fisch",
+				"Kristallfisch",
+				"Teufelsfisch",
+				"Gartenfisch",
+				"Zauberfisch"
+			}
+		);
 		return result.ToArray();
 	}
 
-	private static void AddPack(List<SkinDefinition> result, string prefix, string packName, int count)
+	private static void AddPack(List<SkinDefinition> result, string prefix, string packName, string[] displayNames)
 	{
-		for (int i = 1; i <= count; i++)
+		for (int i = 1; i <= displayNames.Length; i++)
 		{
 			string number = i.ToString("00");
 			string id = $"{prefix}_{number}";
 			result.Add(
 				new SkinDefinition(
 					id,
-					$"{packName} #{i}",
+					displayNames[i - 1],
 					packName,
 					$"res://Assets/Generated/Skins/{id}_frame1.png",
 					$"res://Assets/Generated/Skins/{id}_frame2.png",

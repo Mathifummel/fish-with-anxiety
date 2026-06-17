@@ -51,10 +51,20 @@ public partial class PartyMode : Control
 	private Rect2 arenaBounds = new Rect2(new Vector2(-1500f, -900f), new Vector2(3000f, 1800f));
 	private const float CatchWorldHalfWidth = 12000f;
 	private const float CatchInitialSpawnY = 400f;
+	private const float CatchRoundDuration = 90f;
 	private const float CatchArrowDistance = 980f;
 	private const float CatchArrowFullAlphaDistance = 1750f;
-	private const float CatchStressWarningStart = 40f;
-	private const float CatchStressWarningFullPressure = 92f;
+	private const float CatchStressWarningStart = 34f;
+	private const float CatchStressWarningFullPressure = 96f;
+	private const float CatchLevelTwoTime = 18f;
+	private const float CatchLevelThreeTime = 36f;
+	private const float CatchLevelFourTime = 54f;
+	private const float CatchLevelFiveTime = 72f;
+	private const float CatchSpawnNearDistance = 760f;
+	private const float CatchSpawnFarDistance = 1680f;
+	private const float CatchDespawnDistance = 2450f;
+	private const float CatchEnemyTooFarDistance = 2850f;
+	private const float CatchEnemyTooFarGrace = 2.4f;
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
 	private RoundState state = RoundState.Intro;
 	private MiniGame currentGame = MiniGame.Catch;
@@ -69,6 +79,14 @@ public partial class PartyMode : Control
 	private float introTimer = 2.2f;
 	private float roundOverTimer = 3.2f;
 	private float catchStress = 0f;
+	private float catchElapsed = 0f;
+	private float catchEnemySpawnTimer = 0f;
+	private float catchPassiveSpawnTimer = 0f;
+	private float catchEnemyTooFarTimer = 0f;
+	private float catchEnemySpeedMultiplier = 1.03f;
+	private float catchPassiveSpeedMultiplier = 1f;
+	private int catchLevel = 1;
+	private bool catchStressAudioActive = false;
 	private string statusText = "";
 
 	private PartyFish playerFish;
@@ -162,6 +180,9 @@ public partial class PartyMode : Control
 		float dt = (float)delta;
 		UpdateCooldowns(dt);
 		UpdateAi(dt);
+		UpdateCatchWorld(dt);
+		if (state != RoundState.Playing)
+			return;
 		UpdateCatchStress(dt);
 		if (state != RoundState.Playing)
 			return;
@@ -172,7 +193,7 @@ public partial class PartyMode : Control
 	{
 		HBoxContainer split = new HBoxContainer();
 		split.SetAnchorsPreset(LayoutPreset.FullRect);
-		split.AddThemeConstantOverride("separation", 4);
+		split.AddThemeConstantOverride("separation", 0);
 		AddChild(split);
 
 		SubViewportContainer leftContainer = CreateViewportContainer();
@@ -197,17 +218,6 @@ public partial class PartyMode : Control
 		rightViewport.AddChild(rightCamera);
 		leftCamera.MakeCurrent();
 		rightCamera.MakeCurrent();
-
-		ColorRect divider = new ColorRect();
-		divider.Color = new Color(1f, 1f, 1f, 0.68f);
-		divider.AnchorLeft = 0.5f;
-		divider.AnchorRight = 0.5f;
-		divider.AnchorTop = 0f;
-		divider.AnchorBottom = 1f;
-		divider.OffsetLeft = -2f;
-		divider.OffsetRight = 2f;
-		divider.MouseFilter = MouseFilterEnum.Ignore;
-		AddChild(divider);
 	}
 
 	private SubViewportContainer CreateViewportContainer()
@@ -488,8 +498,16 @@ public partial class PartyMode : Control
 
 	private void SetupCatch()
 	{
-		roundTimer = 45f;
+		roundTimer = CatchRoundDuration;
 		catchStress = 0f;
+		catchElapsed = 0f;
+		catchLevel = 1;
+		catchEnemySpawnTimer = 0f;
+		catchPassiveSpawnTimer = 0f;
+		catchEnemyTooFarTimer = 0f;
+		catchStressAudioActive = false;
+		catchEnemySpeedMultiplier = 1.03f;
+		catchPassiveSpeedMultiplier = 1f;
 		arenaBounds = new Rect2(
 			new Vector2(-CatchWorldHalfWidth, OceanMapBackground.WorldPlayerMinY),
 			new Vector2(CatchWorldHalfWidth * 2f, OceanMapBackground.WorldPlayerMaxY - OceanMapBackground.WorldPlayerMinY)
@@ -502,8 +520,11 @@ public partial class PartyMode : Control
 		CreateCatchWorldBackground();
 		CreateCatchAssistArrow();
 
-		for (int i = 0; i < 12; i++)
+		for (int i = 0; i < GetCatchPassiveTarget(); i++)
 			passiveFish.Add(CreatePassiveFish(RandomPoint(160f)));
+
+		for (int i = 0; i < GetCatchEnemyTarget(); i++)
+			SpawnCatchAiEnemy();
 	}
 
 	private void SetupCoins()
@@ -617,7 +638,7 @@ public partial class PartyMode : Control
 			variantTwo ? PartyFish.VisualKind.EnemyTwo : PartyFish.VisualKind.EnemyOne,
 			PartyFish.ControlMode.Ai,
 			position,
-			variantTwo ? 128f : 138f
+			GetCatchAiEnemySpeed(variantTwo)
 		);
 		RegisterAi(fish);
 		return fish;
@@ -625,7 +646,12 @@ public partial class PartyMode : Control
 
 	private PartyFish CreatePassiveFish(Vector2 position)
 	{
-		PartyFish fish = CreatePartyFish(PartyFish.VisualKind.Passive, PartyFish.ControlMode.Ai, position, rng.RandfRange(72f, 108f));
+		PartyFish fish = CreatePartyFish(
+			PartyFish.VisualKind.Passive,
+			PartyFish.ControlMode.Ai,
+			position,
+			rng.RandfRange(72f, 108f) * (currentGame == MiniGame.Catch ? catchPassiveSpeedMultiplier : 1f)
+		);
 		RegisterAi(fish);
 		return fish;
 	}
@@ -754,8 +780,9 @@ public partial class PartyMode : Control
 	{
 		float yMin = OceanMapBackground.WorldPlayerMinY + Mathf.Max(80f, margin * 0.45f);
 		float yMax = OceanMapBackground.WorldPlayerMaxY - Mathf.Max(110f, margin * 0.55f);
+		float centerX = playerFish?.GlobalPosition.X ?? 0f;
 		return new Vector2(
-			rng.RandfRange(-1900f, 1900f),
+			rng.RandfRange(centerX - 1850f, centerX + 1850f),
 			rng.RandfRange(yMin, Mathf.Max(yMin, yMax))
 		);
 	}
@@ -859,7 +886,7 @@ public partial class PartyMode : Control
 		timerLabel.Text = phaseText;
 		scoreLabel.Text = $"Party-Score  P1 {p1MatchScore} : {p2MatchScore} P2    Runde  {p1RoundScore} : {p2RoundScore}";
 		if (currentGame == MiniGame.Catch && state != RoundState.MatchOver)
-			scoreLabel.Text += $"    Stress {Mathf.CeilToInt(catchStress)}%";
+			scoreLabel.Text += $"    Level {catchLevel}    Stress {Mathf.CeilToInt(catchStress)}%";
 		statusLabel.Text = statusText;
 		catchStressBar.Visible = currentGame == MiniGame.Catch && state != RoundState.MatchOver;
 		catchStressBar.Value = catchStress;
@@ -928,8 +955,8 @@ public partial class PartyMode : Control
 			MiniGame.Cops => "Das Gegnerteam muss alle kleinen Fische erwischen, bevor die Zeit abläuft.",
 			MiniGame.DrunkRun => "Dauer-Boost: Berührt so viele Fische wie möglich.",
 			_ => PartyState.Opponent == PartyState.OpponentSelection.Jellyfish
-				? "Die Qualle hat 45 Sekunden, um den kleinen Fisch zu fangen."
-				: "Der Gegnerfisch hat 45 Sekunden, um den kleinen Fisch zu fangen."
+				? "Die Qualle verfolgt den kleinen Fisch durch die normale Wasserwelt."
+				: "Spieler 2 verfolgt den kleinen Fisch durch die normale Wasserwelt."
 		};
 	}
 
@@ -938,6 +965,253 @@ public partial class PartyMode : Control
 		List<PartyFish> keys = new List<PartyFish>(hazardHitCooldowns.Keys);
 		foreach (PartyFish fish in keys)
 			hazardHitCooldowns[fish] -= dt;
+	}
+
+	private void UpdateCatchWorld(float dt)
+	{
+		if (currentGame != MiniGame.Catch || playerFish == null)
+			return;
+
+		catchElapsed += dt;
+		UpdateCatchLevel();
+		UpdateCatchSpawns(dt);
+		UpdateCatchEnemyDistanceRule(dt);
+	}
+
+	private void UpdateCatchEnemyDistanceRule(float dt)
+	{
+		if (enemyFish == null ||
+			playerFish == null ||
+			enemyFish.IsEliminated ||
+			playerFish.IsEliminated)
+		{
+			catchEnemyTooFarTimer = 0f;
+			return;
+		}
+
+		float distance = enemyFish.GlobalPosition.DistanceTo(playerFish.GlobalPosition);
+		if (distance <= CatchEnemyTooFarDistance)
+		{
+			catchEnemyTooFarTimer = 0f;
+			return;
+		}
+
+		catchEnemyTooFarTimer += dt;
+		if (catchEnemyTooFarTimer < CatchEnemyTooFarGrace)
+		{
+			float remaining = Mathf.Ceil(CatchEnemyTooFarGrace - catchEnemyTooFarTimer);
+			statusText = $"Spieler 2 ist zu weit weg ({remaining:0}s).";
+			return;
+		}
+
+		enemyFish.Kill();
+		EndRound(1, "Spieler 2 war zu weit weg.");
+	}
+
+	private void UpdateCatchLevel()
+	{
+		int targetLevel = GetCatchLevelForElapsed(catchElapsed);
+		if (targetLevel <= catchLevel)
+			return;
+
+		catchLevel = targetLevel;
+		ApplyCatchLevelSettings(true);
+	}
+
+	private int GetCatchLevelForElapsed(float elapsed)
+	{
+		if (elapsed >= CatchLevelFiveTime)
+			return 5;
+
+		if (elapsed >= CatchLevelFourTime)
+			return 4;
+
+		if (elapsed >= CatchLevelThreeTime)
+			return 3;
+
+		if (elapsed >= CatchLevelTwoTime)
+			return 2;
+
+		return 1;
+	}
+
+	private void ApplyCatchLevelSettings(bool showNotice)
+	{
+		float enemyMultiplier = catchLevel switch
+		{
+			1 => 1.03f,
+			2 => 1.14f,
+			3 => 1.28f,
+			4 => 1.4f,
+			_ => 1.53f
+		};
+		float passiveMultiplier = catchLevel switch
+		{
+			1 => 1f,
+			2 => 1.04f,
+			3 => 1.08f,
+			4 => 1.14f,
+			_ => 1.2f
+		};
+
+		ApplyCatchSpeedMultiplier(enemyMultiplier, passiveMultiplier);
+
+		if (!showNotice)
+			return;
+
+		GameAudio.PlayLevelUp(this, catchLevel);
+		statusText = $"Level {catchLevel}: mehr Gegnerfische tauchen auf.";
+	}
+
+	private void ApplyCatchSpeedMultiplier(float enemyMultiplier, float passiveMultiplier)
+	{
+		float enemyRatio = enemyMultiplier / Mathf.Max(catchEnemySpeedMultiplier, 0.01f);
+		float passiveRatio = passiveMultiplier / Mathf.Max(catchPassiveSpeedMultiplier, 0.01f);
+		catchEnemySpeedMultiplier = enemyMultiplier;
+		catchPassiveSpeedMultiplier = passiveMultiplier;
+
+		foreach (PartyFish fish in aiEnemies)
+			fish.BaseSpeed *= enemyRatio;
+
+		foreach (PartyFish fish in passiveFish)
+			fish.BaseSpeed *= passiveRatio;
+	}
+
+	private void UpdateCatchSpawns(float dt)
+	{
+		PruneCatchFish(aiEnemies, CatchDespawnDistance);
+		PruneCatchFish(passiveFish, CatchDespawnDistance * 1.12f);
+
+		catchEnemySpawnTimer -= dt;
+		catchPassiveSpawnTimer -= dt;
+
+		if (aiEnemies.Count < GetCatchEnemyTarget() && catchEnemySpawnTimer <= 0f)
+		{
+			SpawnCatchAiEnemy();
+			catchEnemySpawnTimer = rng.RandfRange(1.3f, 2.6f);
+		}
+
+		if (passiveFish.Count < GetCatchPassiveTarget() && catchPassiveSpawnTimer <= 0f)
+		{
+			passiveFish.Add(CreatePassiveFish(RandomCatchSpawnPoint(520f, 1550f)));
+			catchPassiveSpawnTimer = rng.RandfRange(0.6f, 1.4f);
+		}
+	}
+
+	private void PruneCatchFish(List<PartyFish> fishList, float distance)
+	{
+		float distanceSquared = distance * distance;
+		for (int i = fishList.Count - 1; i >= 0; i--)
+		{
+			PartyFish fish = fishList[i];
+			if (fish == null || !IsInstanceValid(fish))
+			{
+				fishList.RemoveAt(i);
+				continue;
+			}
+
+			if (!IsFarFromCatchPlayers(fish, distanceSquared))
+				continue;
+
+			fish.QueueFree();
+			fishList.RemoveAt(i);
+			aiDirectionTimers.Remove(fish);
+			aiDirections.Remove(fish);
+		}
+	}
+
+	private bool IsFarFromCatchPlayers(PartyFish fish, float distanceSquared)
+	{
+		bool farFromPlayer = playerFish == null ||
+			fish.GlobalPosition.DistanceSquaredTo(playerFish.GlobalPosition) > distanceSquared;
+		bool farFromEnemy = enemyFish == null ||
+			fish.GlobalPosition.DistanceSquaredTo(enemyFish.GlobalPosition) > distanceSquared;
+		return farFromPlayer && farFromEnemy;
+	}
+
+	private int GetCatchEnemyTarget()
+	{
+		return catchLevel switch
+		{
+			1 => 2,
+			2 => 4,
+			3 => 6,
+			4 => 8,
+			_ => 10
+		};
+	}
+
+	private int GetCatchPassiveTarget()
+	{
+		return catchLevel switch
+		{
+			1 => 14,
+			2 => 15,
+			3 => 16,
+			4 => 18,
+			_ => 19
+		};
+	}
+
+	private float GetCatchAiEnemySpeed(bool variantTwo)
+	{
+		float baseSpeed = variantTwo ? 128f : 138f;
+		return baseSpeed * catchEnemySpeedMultiplier;
+	}
+
+	private void SpawnCatchAiEnemy()
+	{
+		bool variantTwo = catchLevel >= 3 && rng.Randf() < GetCatchVariantTwoChance();
+		PartyFish enemy = CreateAiEnemy(RandomCatchSpawnPoint(CatchSpawnNearDistance, CatchSpawnFarDistance), variantTwo);
+		aiEnemies.Add(enemy);
+	}
+
+	private float GetCatchVariantTwoChance()
+	{
+		return catchLevel switch
+		{
+			>= 5 => 0.58f,
+			4 => 0.46f,
+			3 => 0.3f,
+			_ => 0f
+		};
+	}
+
+	private Vector2 RandomCatchSpawnPoint(float minDistance, float maxDistance)
+	{
+		Vector2 center = playerFish?.GlobalPosition ?? Vector2.Zero;
+		for (int i = 0; i < 24; i++)
+		{
+			Vector2 candidate = center + Vector2.FromAngle(rng.RandfRange(0f, Mathf.Tau)) *
+				rng.RandfRange(minDistance, maxDistance);
+			candidate.Y = ClampCatchWaterY(candidate.Y, 140f);
+
+			if (IsCatchSpawnClear(candidate, minDistance * 0.72f))
+				return candidate;
+		}
+
+		Vector2 fallback = center + Vector2.FromAngle(rng.RandfRange(0f, Mathf.Tau)) * maxDistance;
+		fallback.Y = ClampCatchWaterY(fallback.Y, 140f);
+		return fallback;
+	}
+
+	private float ClampCatchWaterY(float y, float margin)
+	{
+		float minY = OceanMapBackground.WorldPlayerMinY + margin;
+		float maxY = OceanMapBackground.WorldPlayerMaxY - margin;
+		return Mathf.Clamp(y, minY, Mathf.Max(minY, maxY));
+	}
+
+	private bool IsCatchSpawnClear(Vector2 position, float minDistance)
+	{
+		float minDistanceSquared = minDistance * minDistance;
+		if (playerFish != null && position.DistanceSquaredTo(playerFish.GlobalPosition) < minDistanceSquared)
+			return false;
+
+		if (enemyFish != null && position.DistanceSquaredTo(enemyFish.GlobalPosition) < minDistanceSquared)
+			return false;
+
+		return true;
 	}
 
 	private void UpdateAi(float dt)
@@ -1046,8 +1320,12 @@ public partial class PartyMode : Control
 		float contactPressure = 0f;
 
 		AddStressPressure(enemyFish, 410f, 62f, 1f, ref threatPressure, ref contactPressure);
+		foreach (PartyFish enemy in aiEnemies)
+			AddStressPressure(enemy, 390f, 54f, 0.82f, ref threatPressure, ref contactPressure);
+		foreach (PartyFish fish in passiveFish)
+			AddStressPressure(fish, 280f, 10f, 0.34f, ref threatPressure, ref contactPressure);
 
-		float targetStress = Mathf.Clamp(threatPressure * 58f + contactPressure * 28f, 0f, 100f);
+		float targetStress = Mathf.Clamp(threatPressure * 58f + contactPressure * 28f, 0f, 98f);
 		float stressSpeed = targetStress > catchStress ? 140f : 22f;
 		catchStress = Mathf.MoveToward(catchStress, targetStress, stressSpeed * dt);
 
@@ -1056,12 +1334,6 @@ public partial class PartyMode : Control
 
 		catchStress = Mathf.Clamp(catchStress, 0f, 100f);
 		playerFish.CurrentStress = catchStress;
-
-		if (catchStress >= 100f)
-		{
-			playerFish.Kill();
-			EndRound(2, "Der Stress war zu viel.");
-		}
 	}
 
 	private void UpdateCatchStressAudio(float dt)
@@ -1069,9 +1341,12 @@ public partial class PartyMode : Control
 		if (catchStressWarningPlayer == null)
 			return;
 
-		bool active = currentGame == MiniGame.Catch &&
+		bool pressureActive = catchStressAudioActive
+			? catchStress >= CatchStressWarningStart - 9f
+			: catchStress >= CatchStressWarningStart;
+		catchStressAudioActive = currentGame == MiniGame.Catch &&
 			state == RoundState.Playing &&
-			catchStress >= CatchStressWarningStart &&
+			pressureActive &&
 			playerFish != null &&
 			!playerFish.IsEliminated;
 
@@ -1084,11 +1359,11 @@ public partial class PartyMode : Control
 
 		GameAudio.UpdateStressWarningLoop(
 			catchStressWarningPlayer,
-			active,
+			catchStressAudioActive,
 			pressure,
 			dt,
-			-18.5f,
-			-7.5f
+			-22f,
+			-10.5f
 		);
 	}
 
@@ -1407,7 +1682,7 @@ public partial class PartyMode : Control
 		switch (currentGame)
 		{
 			case MiniGame.Catch:
-				EndRound(1, "45 Sekunden überlebt.");
+				EndRound(1, $"{Mathf.RoundToInt(CatchRoundDuration)} Sekunden überlebt.");
 				break;
 
 			case MiniGame.Coins:
