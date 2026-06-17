@@ -39,6 +39,8 @@ public partial class MainMenu : Control
 
 	private SubViewport backgroundViewport;
 	private Button multiplayerButton;
+	private Button shopIconButton;
+	private Button missionsIconButton;
 	private TextureRect gameLogo;
 	private Panel controllerNoticePanel;
 	private TextureRect controllerNoticeImage;
@@ -72,6 +74,7 @@ public partial class MainMenu : Control
 		multiplayerButton = GetNodeOrNull<Button>(MultiplayerButtonPath);
 		CallDeferred(nameof(RefreshButtonPivots));
 		GameUi.FocusFirstButton(this);
+		CallDeferred(nameof(ConfigureMainMenuFocusNavigation));
 		SyncConnectedJoypads();
 		SceneTransition.FadeIn(GetTree(), 0.28f);
 	}
@@ -351,8 +354,91 @@ public partial class MainMenu : Control
 		bar.AddThemeConstantOverride("separation", 12);
 		ui.AddChild(bar);
 
-		bar.AddChild(CreateIconMenuButton("Shop", ShopIconTexturePath, OpenShop));
-		bar.AddChild(CreateIconMenuButton("Missionen", MissionsIconTexturePath, OpenMissions));
+		shopIconButton = CreateIconMenuButton("Shop", ShopIconTexturePath, OpenShop);
+		missionsIconButton = CreateIconMenuButton("Missionen", MissionsIconTexturePath, OpenMissions);
+		bar.AddChild(shopIconButton);
+		bar.AddChild(missionsIconButton);
+	}
+
+	private void ConfigureMainMenuFocusNavigation()
+	{
+		GameUi.ConfigureButtonNavigation(this);
+
+		if (shopIconButton == null || missionsIconButton == null)
+			return;
+
+		List<Button> leftButtons = GetLeftMenuButtons();
+		if (leftButtons.Count == 0)
+			return;
+
+		for (int i = 0; i < leftButtons.Count; i++)
+		{
+			Button current = leftButtons[i];
+			Button previous = leftButtons[Mathf.PosMod(i - 1, leftButtons.Count)];
+			Button next = leftButtons[Mathf.PosMod(i + 1, leftButtons.Count)];
+
+			SetFocusNeighbor(current, Side.Top, previous);
+			SetFocusNeighbor(current, Side.Bottom, next);
+			SetFocusNeighbor(current, Side.Left, shopIconButton);
+			SetFocusNeighbor(current, Side.Right, shopIconButton);
+		}
+
+		SetFocusNeighbor(shopIconButton, Side.Top, missionsIconButton);
+		SetFocusNeighbor(shopIconButton, Side.Bottom, missionsIconButton);
+		SetFocusNeighbor(shopIconButton, Side.Left, leftButtons[0]);
+		SetFocusNeighbor(shopIconButton, Side.Right, leftButtons[0]);
+
+		SetFocusNeighbor(missionsIconButton, Side.Top, shopIconButton);
+		SetFocusNeighbor(missionsIconButton, Side.Bottom, shopIconButton);
+		SetFocusNeighbor(missionsIconButton, Side.Left, leftButtons[0]);
+		SetFocusNeighbor(missionsIconButton, Side.Right, leftButtons[0]);
+	}
+
+	private List<Button> GetLeftMenuButtons()
+	{
+		List<Button> buttons = new List<Button>();
+
+		AddButtonIfValid(buttons, GetNodeOrNull<Button>(ClassicButtonPath));
+		AddButtonIfValid(buttons, GetNodeOrNull<Button>(MultiplayerButtonPath));
+		AddButtonIfValid(buttons, GetNodeOrNull<Button>(LeaderboardButtonPath));
+		AddButtonIfValid(buttons, GetNodeOrNull<Button>(TutorialButtonPath));
+		AddButtonIfValid(buttons, difficultyButtons.GetValueOrDefault(GameDifficulty.Easy));
+		AddButtonIfValid(buttons, difficultyButtons.GetValueOrDefault(GameDifficulty.Medium));
+		AddButtonIfValid(buttons, difficultyButtons.GetValueOrDefault(GameDifficulty.Hard));
+		AddButtonIfValid(buttons, GetNodeOrNull<Button>(SettingsButtonPath));
+		AddButtonIfValid(buttons, GetNodeOrNull<Button>(CreditsButtonPath));
+		AddButtonIfValid(buttons, GetNodeOrNull<Button>(QuitButtonPath));
+
+		return buttons;
+	}
+
+	private void AddButtonIfValid(List<Button> buttons, Button button)
+	{
+		if (button != null && button.IsVisibleInTree() && !button.Disabled)
+			buttons.Add(button);
+	}
+
+	private void SetFocusNeighbor(Button source, Side side, Button target)
+	{
+		if (source == null || target == null)
+			return;
+
+		NodePath path = source.GetPathTo(target);
+		switch (side)
+		{
+			case Side.Left:
+				source.FocusNeighborLeft = path;
+				break;
+			case Side.Right:
+				source.FocusNeighborRight = path;
+				break;
+			case Side.Top:
+				source.FocusNeighborTop = path;
+				break;
+			case Side.Bottom:
+				source.FocusNeighborBottom = path;
+				break;
+		}
 	}
 
 	private Button CreateIconMenuButton(string tooltip, string iconPath, Action handler)
@@ -528,6 +614,7 @@ public partial class MainMenu : Control
 			string joyName = Input.GetJoyName(device) ?? "";
 			knownJoypads[device] = joyName;
 			GameUi.FocusFirstButton(this);
+			CallDeferred(nameof(ConfigureMainMenuFocusNavigation));
 			ShowControllerNotice(joyName, true);
 		}
 

@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://dt0n7bheoho17"
+path="res://.godot/imported/Donkey Kong Country - Aquatic Ambience [Restored].wav-a2d1d58278330cb1643b583d3c31e2a1.sample"
+
+[deps]
+
+source_file="res://Assets/Donkey Kong Country - Aquatic Ambience [Restored].wav"
+dest_files=["res://.godot/imported/Donkey Kong Country - Aquatic Ambience [Restored].wav-a2d1d58278330cb1643b583d3c31e2a1.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

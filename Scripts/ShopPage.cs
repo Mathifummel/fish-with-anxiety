@@ -4,6 +4,7 @@ public partial class ShopPage : Control
 {
 	private Label coinLabel;
 	private Label statusLabel;
+	private ScrollContainer skinScroll;
 	private GridContainer skinGrid;
 	private VBoxContainer itemList;
 	private ScoreManager scoreManager;
@@ -87,10 +88,13 @@ public partial class ShopPage : Control
 		Label skinsTitle = CreateLabel("Skins", 20, GameUi.AccentText);
 		skinsColumn.AddChild(skinsTitle);
 
-		ScrollContainer skinScroll = new ScrollContainer();
+		skinScroll = new ScrollContainer();
 		skinScroll.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 		skinScroll.SizeFlagsVertical = SizeFlags.ExpandFill;
 		skinScroll.CustomMinimumSize = new Vector2(640f, 420f);
+		skinScroll.HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled;
+		skinScroll.VerticalScrollMode = ScrollContainer.ScrollMode.Auto;
+		skinScroll.FollowFocus = true;
 		skinsColumn.AddChild(skinScroll);
 
 		skinGrid = new GridContainer();
@@ -135,6 +139,15 @@ public partial class ShopPage : Control
 		coinLabel.Text = $"Muenzen: {scoreManager.TotalCoins}";
 		RebuildSkins();
 		RebuildItems();
+		CallDeferred(nameof(RefreshFocusNavigation));
+	}
+
+	private void RefreshFocusNavigation()
+	{
+		GameUi.ConfigureButtonNavigation(this);
+
+		if (GetViewport().GuiGetFocusOwner() == null)
+			GameUi.FocusFirstButton(this);
 	}
 
 	private void RebuildSkins()
@@ -176,9 +189,39 @@ public partial class ShopPage : Control
 		action.CustomMinimumSize = new Vector2(0f, 34f);
 		action.Disabled = scoreManager.SelectedSkinId == skin.Id;
 		action.Pressed += () => HandleSkinPressed(skin);
+		action.FocusEntered += () => EnsureSkinCardVisible(card);
 		layout.AddChild(action);
 
 		return card;
+	}
+
+	private void EnsureSkinCardVisible(Control card)
+	{
+		if (skinScroll == null || card == null)
+			return;
+
+		CallDeferred(nameof(ScrollSkinCardIntoView), card);
+	}
+
+	private void ScrollSkinCardIntoView(Control card)
+	{
+		if (skinScroll == null || card == null || !IsInstanceValid(card))
+			return;
+
+		VScrollBar scrollBar = skinScroll.GetVScrollBar();
+		if (scrollBar == null)
+			return;
+
+		float padding = 14f;
+		float top = card.Position.Y - padding;
+		float bottom = card.Position.Y + card.Size.Y + padding;
+		float viewTop = (float)scrollBar.Value;
+		float viewBottom = viewTop + skinScroll.Size.Y;
+
+		if (top < viewTop)
+			scrollBar.Value = Mathf.Max(scrollBar.MinValue, top);
+		else if (bottom > viewBottom)
+			scrollBar.Value = Mathf.Min(scrollBar.MaxValue, bottom - skinScroll.Size.Y);
 	}
 
 	private string GetSkinButtonText(SkinDefinition skin)
