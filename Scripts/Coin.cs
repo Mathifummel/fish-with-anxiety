@@ -23,7 +23,7 @@ public partial class Coin : Area2D
 			);
 
 			sm.CollectCoin(Value);
-			GameAudio.PlayRandomBubble(this, GlobalPosition, -7f, 1.25f);
+			GameAudio.PlayCoinCollect(this, GlobalPosition);
 
 			QueueFree();
 		}

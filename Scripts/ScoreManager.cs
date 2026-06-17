@@ -40,6 +40,7 @@ public partial class ScoreManager : Node
 	private const string SavePath = "user://highscores.json";
 	private const string CoinSavePath = "user://coins.save";
 	private const string ProgressSavePath = "user://shop_progress.cfg";
+	private const string TutorialSeenPath = "user://tutorial_seen.save";
 	private const string ShopSection = "shop";
 	private const string ItemsSection = "items";
 	private const string MissionsSection = "missions";
@@ -345,6 +346,7 @@ public partial class ScoreManager : Node
 		DeleteUserFile(SavePath);
 		DeleteUserFile(CoinSavePath);
 		DeleteUserFile(ProgressSavePath);
+		DeleteUserFile(TutorialSeenPath);
 	}
 
 	private void RecordRunProgress(int level)
@@ -412,7 +414,7 @@ public partial class ScoreManager : Node
 		Error error = DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
 
 		if (error != Error.Ok)
-			GD.PushWarning($"Konnte Speicherdatei nicht loeschen: {path}");
+			GD.PushWarning($"Konnte Speicherdatei nicht löschen: {path}");
 	}
 
 	private void SaveTotalCoins()

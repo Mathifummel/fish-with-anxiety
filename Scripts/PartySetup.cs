@@ -98,11 +98,11 @@ public partial class PartySetup : Control
 		content.AddChild(catchButton);
 
 		AddWipButton("Party-Modus");
-		AddWipButton("Muenzen sammeln");
-		AddWipButton("Raeuber und Gendarm");
+		AddWipButton("Münzen sammeln");
+		AddWipButton("Räuber und Gendarm");
 		AddWipButton("Betrunkener Run");
 
-		Button backButton = CreateButton("Zurueck");
+		Button backButton = CreateButton("Zurück");
 		backButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
 		content.AddChild(backButton);
 
@@ -127,7 +127,7 @@ public partial class PartySetup : Control
 		ClearDynamicRows();
 
 		titleLabel.Text = "Roster";
-		infoLabel.Text = "Links waehlt Spieler 1 einen freigeschalteten Fisch. Rechts waehlt Spieler 2 den Jaeger.";
+		infoLabel.Text = "Links wählt Spieler 1 einen freigeschalteten Fisch. Rechts wählt Spieler 2 den Jäger.";
 
 		HBoxContainer columns = new HBoxContainer();
 		columns.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -148,7 +148,7 @@ public partial class PartySetup : Control
 		startButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/PartyMode.tscn", 0.32f);
 		actions.AddChild(startButton);
 
-		Button backButton = CreateButton("Zurueck");
+		Button backButton = CreateButton("Zurück");
 		backButton.CustomMinimumSize = new Vector2(190f, 46f);
 		backButton.Pressed += ShowModeStep;
 		actions.AddChild(backButton);
@@ -212,7 +212,7 @@ public partial class PartySetup : Control
 		name.ClipText = true;
 		layout.AddChild(name);
 
-		Button select = CreateButton(PartyState.PlayerSkinId == skin.Id ? "Aktiv" : "Waehlen");
+		Button select = CreateButton(PartyState.PlayerSkinId == skin.Id ? "Aktiv" : "Wählen");
 		select.CustomMinimumSize = new Vector2(0f, 34f);
 		select.Disabled = PartyState.PlayerSkinId == skin.Id;
 		select.Pressed += () =>
@@ -243,7 +243,7 @@ public partial class PartySetup : Control
 		column.SizeFlagsVertical = SizeFlags.ExpandFill;
 		column.AddThemeConstantOverride("separation", 8);
 
-		Label label = CreateLabel("Jaeger", 21, GameUi.AccentText);
+		Label label = CreateLabel("Jäger", 21, GameUi.AccentText);
 		label.HorizontalAlignment = HorizontalAlignment.Center;
 		column.AddChild(label);
 
@@ -291,7 +291,7 @@ public partial class PartySetup : Control
 		Label name = CreateLabel(title, 15, GameUi.LightText);
 		copy.AddChild(name);
 
-		Button select = CreateButton(selected ? "Aktiv" : "Waehlen");
+		Button select = CreateButton(selected ? "Aktiv" : "Wählen");
 		select.CustomMinimumSize = new Vector2(0f, 34f);
 		select.Disabled = selected;
 		select.Pressed += () =>

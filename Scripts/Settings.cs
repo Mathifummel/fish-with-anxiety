@@ -7,6 +7,7 @@ public partial class Settings : Control
 	private VBoxContainer customBindings;
 	private Label captureLabel;
 	private Label statusLabel;
+	private ConfirmationDialog resetSaveDialog;
 	private string pendingCustomAction = "";
 
 	private readonly Dictionary<PlayerFish.ControlScheme, Button> modeButtons =
@@ -84,9 +85,9 @@ public partial class Settings : Control
 		panel.AnchorRight = 0.5f;
 		panel.AnchorBottom = 0.5f;
 		panel.OffsetLeft = -330f;
-		panel.OffsetTop = -342f;
+		panel.OffsetTop = -352f;
 		panel.OffsetRight = 330f;
-		panel.OffsetBottom = 342f;
+		panel.OffsetBottom = 352f;
 		panel.AddThemeStyleboxOverride("panel", GameUi.CreatePanelStyle());
 		AddChild(panel);
 
@@ -148,9 +149,15 @@ public partial class Settings : Control
 		resetButton.Pressed += ResetCustomBindings;
 		actions.AddChild(resetButton);
 
-		Button backButton = CreateMenuButton("Zurueck");
+		Button backButton = CreateMenuButton("Zurück");
 		backButton.Pressed += GoBack;
 		actions.AddChild(backButton);
+
+		Button deleteSaveButton = CreateDangerButton("Spielstand löschen");
+		deleteSaveButton.Pressed += ShowResetSaveDialog;
+		layout.AddChild(deleteSaveButton);
+
+		CreateResetSaveDialog();
 
 		ControllerHintBar controllerHints = GameUi.CreateControllerHintBar(GameUi.ControllerHintMode.BackOnly);
 		controllerHints.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
@@ -223,6 +230,38 @@ public partial class Settings : Control
 		return button;
 	}
 
+	private Button CreateDangerButton(string text)
+	{
+		Button button = CreateMenuButton(text);
+		button.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		button.CustomMinimumSize = new Vector2(260f, 42f);
+		button.AddThemeStyleboxOverride(
+			"normal",
+			GameUi.CreateButtonStyle(new Color(1f, 0.48f, 0.48f, 0.58f), new Color(1f, 0.74f, 0.74f, 0.92f))
+		);
+		button.AddThemeStyleboxOverride(
+			"hover",
+			GameUi.CreateButtonStyle(new Color(1f, 0.62f, 0.62f, 0.78f), new Color(1f, 0.88f, 0.88f, 1f))
+		);
+		button.AddThemeStyleboxOverride(
+			"pressed",
+			GameUi.CreateButtonStyle(new Color(0.92f, 0.28f, 0.28f, 0.9f), new Color(1f, 0.9f, 0.9f, 1f))
+		);
+		return button;
+	}
+
+	private void CreateResetSaveDialog()
+	{
+		resetSaveDialog = new ConfirmationDialog();
+		resetSaveDialog.Title = "Spielstand löschen";
+		resetSaveDialog.DialogText =
+			"Willst du wirklich alles zurücksetzen?\nHighscores, Münzen, Shop, Missionen und Tutorial-Fortschritt gehen verloren.";
+		resetSaveDialog.OkButtonText = "Ja, löschen";
+		resetSaveDialog.CancelButtonText = "Abbrechen";
+		resetSaveDialog.Confirmed += ResetSaveData;
+		AddChild(resetSaveDialog);
+	}
+
 	private void AddModeButton(GridContainer parent, string text, PlayerFish.ControlScheme scheme)
 	{
 		Button button = CreateMenuButton(text);
@@ -237,7 +276,7 @@ public partial class Settings : Control
 		button.Pressed += () =>
 		{
 			pendingCustomAction = action;
-			captureLabel.Text = $"{label}: Taste oder Mausklick druecken";
+			captureLabel.Text = $"{label}: Taste oder Mausklick drücken";
 			UpdateStatus("Esc bricht ab");
 		};
 
@@ -292,6 +331,24 @@ public partial class Settings : Control
 		PlayerFish.SaveControlSettings();
 		UpdateCustomButtonLabels();
 		UpdateStatus("Standard-Tasten wiederhergestellt");
+	}
+
+	private void ShowResetSaveDialog()
+	{
+		resetSaveDialog?.PopupCentered();
+	}
+
+	private void ResetSaveData()
+	{
+		ScoreManager scoreManager = GetNodeOrNull<ScoreManager>("/root/ScoreManager");
+		if (scoreManager == null)
+		{
+			UpdateStatus("ScoreManager fehlt");
+			return;
+		}
+
+		scoreManager.ResetAllProgress();
+		UpdateStatus("Spielstand gelöscht");
 	}
 
 	private void SetKey(string action, Key key)

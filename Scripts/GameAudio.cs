@@ -15,6 +15,7 @@ public static class GameAudio
 	public const string StressWarningPath = "res://Assets/Sounds/stress_warning_short.wav";
 	public const string UiButtonPath = "res://Assets/Minecraft Menu Button Sound Effect  Sounffex.wav";
 	public const string CountdownPath = "res://Assets/Friday Night Funkin - 3, 2, 1, GO! - Sound Effect (HD).wav";
+	public const string CoinCollectPath = "res://Assets/Super Mario 64 - Gold Coin Sound Effect [Free Ringtone Download].wav";
 	public const string MusicBusName = "Music";
 	public const string SfxBusName = "SFX";
 
@@ -225,6 +226,18 @@ public static class GameAudio
 				PlaySpatialOneShot(context, StressWarningPath, globalPosition, -12f, 0.96f, 760f);
 				break;
 		}
+	}
+
+	public static void PlayCoinCollect(Node context, Vector2 globalPosition)
+	{
+		PlaySpatialOneShot(
+			context,
+			CoinCollectPath,
+			globalPosition,
+			-6f,
+			(float)GD.RandRange(0.96f, 1.08f),
+			760f
+		);
 	}
 
 	public static void FadeLoopVolume(AudioStreamPlayer player, float targetDb, float dt, float speedDbPerSecond = 28f)

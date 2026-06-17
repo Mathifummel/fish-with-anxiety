@@ -77,6 +77,7 @@ public partial class CreditsPage : Control
 		AddLabel(content, "Stresssoundeffekt - edited into short stress warning", 16, GameUi.LightText);
 		AddLabel(content, "Minecraft Menu Button Sound Effect", 16, GameUi.LightText);
 		AddLabel(content, "Friday Night Funkin - 3, 2, 1, GO! Sound Effect", 16, GameUi.LightText);
+		AddLabel(content, "Super Mario 64 - Gold Coin Sound Effect", 16, GameUi.LightText);
 
 		AddSpacer(content, 20f);
 		AddLabel(content, "Thanks for Playing Mr. Haueisen - Mathi, Jakob, Rodi and Vlad", 22, new Color(1f, 0.94f, 0.55f));

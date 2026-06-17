@@ -90,7 +90,7 @@ public partial class MissionsPage : Control
 		footer.Alignment = BoxContainer.AlignmentMode.Center;
 		layout.AddChild(footer);
 
-		Button backButton = CreateMenuButton("Zurueck");
+		Button backButton = CreateMenuButton("Zurück");
 		backButton.CustomMinimumSize = new Vector2(240f, 42f);
 		backButton.Pressed += GoBack;
 		footer.AddChild(backButton);
@@ -102,7 +102,7 @@ public partial class MissionsPage : Control
 
 	private void RefreshMissions()
 	{
-		coinLabel.Text = $"Muenzen: {scoreManager.TotalCoins}";
+		coinLabel.Text = $"Münzen: {scoreManager.TotalCoins}";
 		ClearChildren(missionList);
 
 		foreach (MissionDefinition mission in MissionCatalog.Missions)
@@ -164,7 +164,7 @@ public partial class MissionsPage : Control
 		if (!scoreManager.TryClaimMission(mission.Id))
 			return;
 
-		statusLabel.Text = $"+{MissionCatalog.Reward} Muenzen";
+		statusLabel.Text = $"+{MissionCatalog.Reward} Münzen";
 		GameAudio.PlayOneShot(this, GameAudio.UiButtonPath, -8f);
 		RefreshMissions();
 	}

@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://btksuevsgju48"
+path="res://.godot/imported/Super Mario 64 - Gold Coin Sound Effect [Free Ringtone Download].wav-4c7c1230fd77c2188abe34b70b91279c.sample"
+
+[deps]
+
+source_file="res://Assets/Super Mario 64 - Gold Coin Sound Effect [Free Ringtone Download].wav"
+dest_files=["res://.godot/imported/Super Mario 64 - Gold Coin Sound Effect [Free Ringtone Download].wav-4c7c1230fd77c2188abe34b70b91279c.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

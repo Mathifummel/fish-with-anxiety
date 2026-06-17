@@ -58,21 +58,21 @@ public static class ShopCatalog
 		new StartItemDefinition(
 			StartItemKind.ExtraHeart,
 			"Extra Herz",
-			"Startet die naechste Runde mit einem zweiten Leben.",
+			"Startet die nächste Runde mit einem zweiten Leben.",
 			"res://Assets/Herz.png",
 			StartItemPrice
 		),
 		new StartItemDefinition(
 			StartItemKind.Alcohol,
 			"Alkohol",
-			"Ein Start-Item fuer kurze Unverwundbarkeit.",
+			"Ein Start-Item für kurze Unverwundbarkeit.",
 			"res://Assets/Alkohol.png",
 			StartItemPrice
 		),
 		new StartItemDefinition(
 			StartItemKind.ChorusFruit,
 			"Chorusfrucht",
-			"Ein Start-Item fuer einen Notfall-Teleport.",
+			"Ein Start-Item für einen Notfall-Teleport.",
 			"res://Assets/Chorusfrucht.png",
 			StartItemPrice
 		)
@@ -139,7 +139,7 @@ public static class ShopCatalog
 				"Lavafisch",
 				"Eisfisch",
 				"Piratenfisch",
-				"Koenigsfisch",
+				"Königsfisch",
 				"Froschfisch",
 				"Skelettfisch"
 			}

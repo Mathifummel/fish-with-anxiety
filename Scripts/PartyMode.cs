@@ -1479,6 +1479,7 @@ public partial class PartyMode : Control
 			if (Touches(playerFish, coin, 34f))
 			{
 				p1RoundScore++;
+				GameAudio.PlayCoinCollect(this, coin.GlobalPosition);
 				coin.QueueFree();
 				coins.RemoveAt(i);
 				SpawnCoin(RandomPoint(90f));
@@ -1486,6 +1487,7 @@ public partial class PartyMode : Control
 			else if (Touches(enemyFish, coin, 34f))
 			{
 				p2RoundScore++;
+				GameAudio.PlayCoinCollect(this, coin.GlobalPosition);
 				coin.QueueFree();
 				coins.RemoveAt(i);
 				SpawnCoin(RandomPoint(90f));
