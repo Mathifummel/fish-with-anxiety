@@ -1,4 +1,5 @@
 using Godot;
+using System;
 using System.Collections.Generic;
 
 public partial class Settings : Control
@@ -83,9 +84,9 @@ public partial class Settings : Control
 		panel.AnchorRight = 0.5f;
 		panel.AnchorBottom = 0.5f;
 		panel.OffsetLeft = -330f;
-		panel.OffsetTop = -315f;
+		panel.OffsetTop = -342f;
 		panel.OffsetRight = 330f;
-		panel.OffsetBottom = 315f;
+		panel.OffsetBottom = 342f;
 		panel.AddThemeStyleboxOverride("panel", GameUi.CreatePanelStyle());
 		AddChild(panel);
 
@@ -101,6 +102,8 @@ public partial class Settings : Control
 		Label title = CreateLabel("Einstellungen", 30, GameUi.LightText);
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		layout.AddChild(title);
+
+		AddSoundSettings(layout);
 
 		Label controlsTitle = CreateLabel("Steuerung", 20, GameUi.AccentText);
 		controlsTitle.HorizontalAlignment = HorizontalAlignment.Center;
@@ -152,6 +155,53 @@ public partial class Settings : Control
 		ControllerHintBar controllerHints = GameUi.CreateControllerHintBar(GameUi.ControllerHintMode.BackOnly);
 		controllerHints.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
 		layout.AddChild(controllerHints);
+	}
+
+	private void AddSoundSettings(VBoxContainer parent)
+	{
+		Label soundTitle = CreateLabel("Sound", 20, GameUi.AccentText);
+		soundTitle.HorizontalAlignment = HorizontalAlignment.Center;
+		parent.AddChild(soundTitle);
+
+		VBoxContainer soundBox = new VBoxContainer();
+		soundBox.AddThemeConstantOverride("separation", 5);
+		parent.AddChild(soundBox);
+
+		AddVolumeSlider(soundBox, "Musik", GameAudio.MusicVolume, GameAudio.SetMusicVolume);
+		AddVolumeSlider(soundBox, "Effekte", GameAudio.SfxVolume, GameAudio.SetSfxVolume);
+	}
+
+	private void AddVolumeSlider(VBoxContainer parent, string labelText, float value, Action<float> setter)
+	{
+		HBoxContainer row = new HBoxContainer();
+		row.AddThemeConstantOverride("separation", 10);
+		parent.AddChild(row);
+
+		Label label = CreateLabel(labelText, 15, GameUi.LightText);
+		label.CustomMinimumSize = new Vector2(92f, 0f);
+		row.AddChild(label);
+
+		HSlider slider = new HSlider();
+		slider.MinValue = 0;
+		slider.MaxValue = 100;
+		slider.Step = 1;
+		slider.Value = Mathf.RoundToInt(value * 100f);
+		slider.CustomMinimumSize = new Vector2(280f, 28f);
+		slider.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		row.AddChild(slider);
+
+		Label valueLabel = CreateLabel($"{slider.Value:0}%", 14, GameUi.AccentText);
+		valueLabel.CustomMinimumSize = new Vector2(58f, 0f);
+		valueLabel.HorizontalAlignment = HorizontalAlignment.Right;
+		row.AddChild(valueLabel);
+
+		slider.ValueChanged += newValue =>
+		{
+			float normalized = (float)newValue / 100f;
+			setter(normalized);
+			valueLabel.Text = $"{newValue:0}%";
+			UpdateStatus("Sound gespeichert");
+		};
 	}
 
 	private Label CreateLabel(string text, int size, Color color)

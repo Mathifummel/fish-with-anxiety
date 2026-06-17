@@ -5,24 +5,20 @@ public partial class PartySetup : Control
 	private enum SetupStep
 	{
 		Mode,
-		Rounds,
-		Fish
+		Roster
 	}
-
-	private const int MinRounds = 3;
-	private const int MaxRounds = 10;
 
 	private OceanMapBackground backgroundMap;
 	private VBoxContainer content;
 	private Label titleLabel;
 	private Label infoLabel;
-	private Label roundsLabel;
 	private SetupStep step = SetupStep.Mode;
-	private bool singleMiniGameSelected = false;
+	private ScoreManager scoreManager;
 
 	public override void _Ready()
 	{
 		GameAudio.EnsureMenuMusic(this);
+		scoreManager = GetNode<ScoreManager>("/root/ScoreManager");
 		SetAnchorsPreset(LayoutPreset.FullRect);
 		BuildBackground();
 		BuildPanel();
@@ -39,12 +35,8 @@ public partial class PartySetup : Control
 
 		if (step == SetupStep.Mode)
 			SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
-		else if (step == SetupStep.Rounds)
-			ShowModeStep();
-		else if (singleMiniGameSelected)
-			ShowModeStep();
 		else
-			ShowRoundsStep();
+			ShowModeStep();
 	}
 
 	private void BuildBackground()
@@ -68,15 +60,15 @@ public partial class PartySetup : Control
 		AddChild(center);
 
 		PanelContainer panel = new PanelContainer();
-		panel.CustomMinimumSize = new Vector2(560f, 520f);
+		panel.CustomMinimumSize = new Vector2(1040f, 650f);
 		panel.AddThemeStyleboxOverride("panel", GameUi.CreatePanelStyle());
 		center.AddChild(panel);
 
 		MarginContainer margin = new MarginContainer();
 		margin.AddThemeConstantOverride("margin_left", 34);
-		margin.AddThemeConstantOverride("margin_top", 30);
+		margin.AddThemeConstantOverride("margin_top", 28);
 		margin.AddThemeConstantOverride("margin_right", 34);
-		margin.AddThemeConstantOverride("margin_bottom", 30);
+		margin.AddThemeConstantOverride("margin_bottom", 28);
 		panel.AddChild(margin);
 
 		content = new VBoxContainer();
@@ -97,168 +89,224 @@ public partial class PartySetup : Control
 	private void ShowModeStep()
 	{
 		step = SetupStep.Mode;
-		singleMiniGameSelected = false;
 		ClearDynamicRows();
 		titleLabel.Text = "2-Spieler Modus";
-		infoLabel.Text = "Spielt die ganze Party oder startet direkt ein einzelnes Minispiel.";
+		infoLabel.Text = "Fangen ist spielbar. Die anderen Modi bleiben sichtbar, sind aber noch Work in Progress.";
 
-		Button partyButton = CreateButton("Party-Modus");
-		partyButton.Pressed += () =>
-		{
-			PartyState.SelectedGame = PartyState.GameSelection.Party;
-			ShowRoundsStep();
-		};
-		content.AddChild(partyButton);
-
-		Button catchButton = CreateButton("Fangen");
-		catchButton.Pressed += () => SelectSingleMiniGame(PartyState.GameSelection.Catch);
+		Button catchButton = CreateButton("Fangen starten");
+		catchButton.Pressed += ShowRosterStep;
 		content.AddChild(catchButton);
 
-		Button coinsButton = CreateButton("Münzen sammeln");
-		coinsButton.Pressed += () => SelectSingleMiniGame(PartyState.GameSelection.Coins);
-		content.AddChild(coinsButton);
+		AddWipButton("Party-Modus");
+		AddWipButton("Muenzen sammeln");
+		AddWipButton("Raeuber und Gendarm");
+		AddWipButton("Betrunkener Run");
 
-		Button copsButton = CreateButton("Räuber und Gendarm");
-		copsButton.Pressed += () => SelectSingleMiniGame(PartyState.GameSelection.Cops);
-		content.AddChild(copsButton);
-
-		Button drunkButton = CreateButton("Betrunkener Run");
-		drunkButton.Pressed += () => SelectSingleMiniGame(PartyState.GameSelection.DrunkRun);
-		content.AddChild(drunkButton);
-
-		Button backButton = CreateButton("Zurück");
+		Button backButton = CreateButton("Zurueck");
 		backButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.28f);
 		content.AddChild(backButton);
+
 		AddControllerHints();
 		GameUi.FocusFirstButton(this);
 	}
 
-	private void ShowRoundsStep()
+	private void AddWipButton(string title)
 	{
-		step = SetupStep.Rounds;
-		singleMiniGameSelected = false;
-		PartyState.Rounds = Mathf.Clamp(PartyState.Rounds, MinRounds, MaxRounds);
-		ClearDynamicRows();
-		titleLabel.Text = "Party-Modus";
-		infoLabel.Text = "Eine Party mischt kurze Runden aus Fangen, Münzjagd, Räuber und Gendarm und Betrunkenen Run.";
-
-		roundsLabel = CreateLabel("", 28, GameUi.DarkText);
-		roundsLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		content.AddChild(roundsLabel);
-		UpdateRoundsLabel();
-
-		HBoxContainer row = new HBoxContainer();
-		row.Alignment = BoxContainer.AlignmentMode.Center;
-		row.AddThemeConstantOverride("separation", 12);
-		content.AddChild(row);
-
-		Button minus = CreateButton("-");
-		minus.CustomMinimumSize = new Vector2(72f, 46f);
-		minus.Pressed += () =>
-		{
-			PartyState.Rounds = Mathf.Max(MinRounds, PartyState.Rounds - 1);
-			UpdateRoundsLabel();
-		};
-		row.AddChild(minus);
-
-		Button plus = CreateButton("+");
-		plus.CustomMinimumSize = new Vector2(72f, 46f);
-		plus.Pressed += () =>
-		{
-			PartyState.Rounds = Mathf.Min(MaxRounds, PartyState.Rounds + 1);
-			UpdateRoundsLabel();
-		};
-		row.AddChild(plus);
-
-		Button nextButton = CreateButton("Weiter");
-		nextButton.Pressed += ShowFishStep;
-		content.AddChild(nextButton);
-
-		Button backButton = CreateButton("Zurück");
-		backButton.Pressed += ShowModeStep;
-		content.AddChild(backButton);
-		AddControllerHints();
-		GameUi.FocusFirstButton(this);
+		Button button = CreateButton($"{title}  -  WIP");
+		button.Disabled = true;
+		button.TooltipText = "Work in Progress";
+		content.AddChild(button);
 	}
 
-	private void ShowFishStep()
+	private void ShowRosterStep()
 	{
-		step = SetupStep.Fish;
-		ClearDynamicRows();
-		titleLabel.Text = singleMiniGameSelected ? GetSelectionName(PartyState.SelectedGame) : "Fischwahl";
-		infoLabel.Text = "Spieler 1 schwimmt mit WASD. Spieler 2 jagt mit den Pfeiltasten.";
-
-		Label p1 = CreateLabel("Spieler 1: kleiner Fisch", 20, GameUi.DarkText);
-		p1.HorizontalAlignment = HorizontalAlignment.Center;
-		content.AddChild(p1);
-
-		Label p2 = CreateLabel("Spieler 2: Gegnerfisch", 20, GameUi.DarkText);
-		p2.HorizontalAlignment = HorizontalAlignment.Center;
-		content.AddChild(p2);
-
-		HBoxContainer row = new HBoxContainer();
-		row.Alignment = BoxContainer.AlignmentMode.Center;
-		row.AddThemeConstantOverride("separation", 12);
-		content.AddChild(row);
-
-		Button enemyOne = CreateButton("Gegnerfisch 1");
-		enemyOne.Pressed += () =>
-		{
-			PartyState.OpponentSkin = NPCFish.EnemySkin.Gegnerfisch;
-			ShowFishStep();
-		};
-		GameUi.ApplyButton(enemyOne, 16, PartyState.OpponentSkin == NPCFish.EnemySkin.Gegnerfisch);
-		row.AddChild(enemyOne);
-
-		Button enemyTwo = CreateButton("Gegnerfisch 2");
-		enemyTwo.Pressed += () =>
-		{
-			PartyState.OpponentSkin = NPCFish.EnemySkin.Gegnerfisch2;
-			ShowFishStep();
-		};
-		GameUi.ApplyButton(enemyTwo, 16, PartyState.OpponentSkin == NPCFish.EnemySkin.Gegnerfisch2);
-		row.AddChild(enemyTwo);
-
-		Button startButton = CreateButton(singleMiniGameSelected ? "Minispiel starten" : "Party starten");
-		startButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/PartyMode.tscn", 0.32f);
-		content.AddChild(startButton);
-
-		Button backButton = CreateButton("Zurück");
-		backButton.Pressed += () =>
-		{
-			if (singleMiniGameSelected)
-				ShowModeStep();
-			else
-				ShowRoundsStep();
-		};
-		content.AddChild(backButton);
-		AddControllerHints();
-		GameUi.FocusFirstButton(this);
-	}
-
-	private void SelectSingleMiniGame(PartyState.GameSelection selection)
-	{
-		singleMiniGameSelected = true;
-		PartyState.SelectedGame = selection;
+		step = SetupStep.Roster;
+		PartyState.SelectedGame = PartyState.GameSelection.Catch;
 		PartyState.Rounds = 1;
-		ShowFishStep();
+		EnsureSelectedSkinIsOwned();
+		ClearDynamicRows();
+
+		titleLabel.Text = "Roster";
+		infoLabel.Text = "Links waehlt Spieler 1 einen freigeschalteten Fisch. Rechts waehlt Spieler 2 den Jaeger.";
+
+		HBoxContainer columns = new HBoxContainer();
+		columns.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		columns.SizeFlagsVertical = SizeFlags.ExpandFill;
+		columns.AddThemeConstantOverride("separation", 18);
+		content.AddChild(columns);
+
+		columns.AddChild(CreatePlayerRoster());
+		columns.AddChild(CreateOpponentRoster());
+
+		HBoxContainer actions = new HBoxContainer();
+		actions.Alignment = BoxContainer.AlignmentMode.Center;
+		actions.AddThemeConstantOverride("separation", 14);
+		content.AddChild(actions);
+
+		Button startButton = CreateButton("Fangen starten");
+		startButton.CustomMinimumSize = new Vector2(240f, 46f);
+		startButton.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/PartyMode.tscn", 0.32f);
+		actions.AddChild(startButton);
+
+		Button backButton = CreateButton("Zurueck");
+		backButton.CustomMinimumSize = new Vector2(190f, 46f);
+		backButton.Pressed += ShowModeStep;
+		actions.AddChild(backButton);
+
+		AddControllerHints();
+		GameUi.FocusFirstButton(this);
 	}
 
-	private string GetSelectionName(PartyState.GameSelection selection)
+	private Control CreatePlayerRoster()
 	{
-		return selection switch
+		VBoxContainer column = new VBoxContainer();
+		column.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		column.SizeFlagsVertical = SizeFlags.ExpandFill;
+		column.AddThemeConstantOverride("separation", 8);
+
+		Label label = CreateLabel("Spielerfische", 21, GameUi.AccentText);
+		label.HorizontalAlignment = HorizontalAlignment.Center;
+		column.AddChild(label);
+
+		ScrollContainer scroll = new ScrollContainer();
+		scroll.CustomMinimumSize = new Vector2(610f, 380f);
+		scroll.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		scroll.SizeFlagsVertical = SizeFlags.ExpandFill;
+		scroll.HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled;
+		scroll.VerticalScrollMode = ScrollContainer.ScrollMode.Auto;
+		scroll.FollowFocus = true;
+		column.AddChild(scroll);
+
+		GridContainer grid = new GridContainer();
+		grid.Columns = 3;
+		grid.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		grid.AddThemeConstantOverride("h_separation", 10);
+		grid.AddThemeConstantOverride("v_separation", 10);
+		scroll.AddChild(grid);
+
+		foreach (SkinDefinition skin in ShopCatalog.Skins)
 		{
-			PartyState.GameSelection.Coins => "Münzen sammeln",
-			PartyState.GameSelection.Cops => "Räuber und Gendarm",
-			PartyState.GameSelection.DrunkRun => "Betrunkener Run",
-			_ => "Fangen"
-		};
+			if (!scoreManager.IsSkinOwned(skin.Id))
+				continue;
+
+			grid.AddChild(CreatePlayerSkinCard(skin));
+		}
+
+		return column;
 	}
 
-	private void UpdateRoundsLabel()
+	private Control CreatePlayerSkinCard(SkinDefinition skin)
 	{
-		if (roundsLabel != null)
-			roundsLabel.Text = $"{PartyState.Rounds} Runden";
+		PanelContainer card = new PanelContainer();
+		card.CustomMinimumSize = new Vector2(178f, 136f);
+		card.AddThemeStyleboxOverride("panel", CreateCardStyle(PartyState.PlayerSkinId == skin.Id));
+
+		VBoxContainer layout = new VBoxContainer();
+		layout.AddThemeConstantOverride("separation", 5);
+		card.AddChild(layout);
+
+		TextureRect preview = new TextureRect();
+		preview.Texture = ResourceLoader.Load<Texture2D>(skin.Frame1Path);
+		preview.CustomMinimumSize = new Vector2(128f, 58f);
+		preview.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		preview.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		layout.AddChild(preview);
+
+		Label name = CreateLabel(skin.DisplayName, 12, GameUi.LightText);
+		name.HorizontalAlignment = HorizontalAlignment.Center;
+		name.ClipText = true;
+		layout.AddChild(name);
+
+		Button select = CreateButton(PartyState.PlayerSkinId == skin.Id ? "Aktiv" : "Waehlen");
+		select.CustomMinimumSize = new Vector2(0f, 34f);
+		select.Disabled = PartyState.PlayerSkinId == skin.Id;
+		select.Pressed += () =>
+		{
+			PartyState.PlayerSkinId = skin.Id;
+			ShowRosterStep();
+		};
+		layout.AddChild(select);
+
+		return card;
+	}
+
+	private Control CreateOpponentRoster()
+	{
+		VBoxContainer column = new VBoxContainer();
+		column.CustomMinimumSize = new Vector2(310f, 0f);
+		column.SizeFlagsVertical = SizeFlags.ExpandFill;
+		column.AddThemeConstantOverride("separation", 8);
+
+		Label label = CreateLabel("Jaeger", 21, GameUi.AccentText);
+		label.HorizontalAlignment = HorizontalAlignment.Center;
+		column.AddChild(label);
+
+		column.AddChild(CreateOpponentCard(
+			PartyState.OpponentSelection.EnemyOne,
+			"Gegnerfisch 1",
+			"res://Assets/Gegnerfischframe1.png"
+		));
+		column.AddChild(CreateOpponentCard(
+			PartyState.OpponentSelection.EnemyTwo,
+			"Gegnerfisch 2",
+			"res://Assets/Gegnerfisch2frame1.png"
+		));
+		column.AddChild(CreateOpponentCard(
+			PartyState.OpponentSelection.Jellyfish,
+			"Qualle",
+			"res://Assets/Qualle.png"
+		));
+
+		return column;
+	}
+
+	private Control CreateOpponentCard(PartyState.OpponentSelection opponent, string title, string texturePath)
+	{
+		PanelContainer card = new PanelContainer();
+		bool selected = PartyState.Opponent == opponent;
+		card.AddThemeStyleboxOverride("panel", CreateCardStyle(selected));
+
+		HBoxContainer row = new HBoxContainer();
+		row.AddThemeConstantOverride("separation", 12);
+		card.AddChild(row);
+
+		TextureRect preview = new TextureRect();
+		preview.Texture = ResourceLoader.Load<Texture2D>(texturePath);
+		preview.CustomMinimumSize = new Vector2(78f, 66f);
+		preview.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		preview.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		row.AddChild(preview);
+
+		VBoxContainer copy = new VBoxContainer();
+		copy.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		copy.AddThemeConstantOverride("separation", 6);
+		row.AddChild(copy);
+
+		Label name = CreateLabel(title, 15, GameUi.LightText);
+		copy.AddChild(name);
+
+		Button select = CreateButton(selected ? "Aktiv" : "Waehlen");
+		select.CustomMinimumSize = new Vector2(0f, 34f);
+		select.Disabled = selected;
+		select.Pressed += () =>
+		{
+			PartyState.Opponent = opponent;
+			PartyState.OpponentSkin = opponent == PartyState.OpponentSelection.EnemyTwo
+				? NPCFish.EnemySkin.Gegnerfisch2
+				: NPCFish.EnemySkin.Gegnerfisch;
+			ShowRosterStep();
+		};
+		copy.AddChild(select);
+
+		return card;
+	}
+
+	private void EnsureSelectedSkinIsOwned()
+	{
+		if (scoreManager == null || scoreManager.IsSkinOwned(PartyState.PlayerSkinId))
+			return;
+
+		PartyState.PlayerSkinId = ShopCatalog.DefaultSkinId;
 	}
 
 	private void ClearDynamicRows()
@@ -281,6 +329,7 @@ public partial class PartySetup : Control
 	{
 		Label label = new Label();
 		label.Text = text;
+		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		GameUi.ApplyLabel(label, fontSize, color);
 		return label;
 	}
@@ -290,8 +339,21 @@ public partial class PartySetup : Control
 		Button button = new Button();
 		button.Text = text;
 		button.CustomMinimumSize = new Vector2(230f, 46f);
-		button.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 		GameUi.ApplyButton(button, 16);
 		return button;
+	}
+
+	private StyleBoxFlat CreateCardStyle(bool selected)
+	{
+		StyleBoxFlat style = GameUi.CreateButtonStyle(
+			selected ? new Color(0.03f, 0.24f, 0.2f, 0.78f) : new Color(0.02f, 0.14f, 0.2f, 0.64f),
+			selected ? new Color(0.76f, 1f, 0.66f, 0.78f) : new Color(0.72f, 0.96f, 1f, 0.42f)
+		);
+		style.ContentMarginLeft = 10;
+		style.ContentMarginTop = 8;
+		style.ContentMarginRight = 10;
+		style.ContentMarginBottom = 8;
+		return style;
 	}
 }

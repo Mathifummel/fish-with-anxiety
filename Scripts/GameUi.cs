@@ -373,7 +373,9 @@ public static class GameUi
 			return;
 
 		Vector2 contentSize = hintBar.GetCombinedMinimumSize();
-		Vector2 viewportSize = hintBar.GetViewportRect().Size;
+		Vector2 viewportSize = hintBar.IsInsideTree()
+			? hintBar.GetViewportRect().Size
+			: new Vector2(1280f, 720f);
 		if (viewportSize.X <= 1f)
 			viewportSize = new Vector2(1280f, 720f);
 

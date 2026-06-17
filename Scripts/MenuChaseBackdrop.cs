@@ -2,10 +2,10 @@ using Godot;
 
 public partial class MenuChaseBackdrop : Node2D
 {
-	private const int EnemyCount = 13;
+	private const int EnemyCount = 7;
 	private const float RouteStartPadding = 260f;
 	private const float RouteEndPadding = 720f;
-	private const float RouteSpeed = 0.055f;
+	private const float RouteSpeed = 0.026f;
 	private readonly Sprite2D[] enemies = new Sprite2D[EnemyCount];
 	private readonly Sprite2D[] bubbles = new Sprite2D[32];
 	private readonly Vector2[] enemyOffsets = new Vector2[EnemyCount];
@@ -95,9 +95,9 @@ public partial class MenuChaseBackdrop : Node2D
 			AddChild(enemy);
 			enemies[i] = enemy;
 
-			float column = i / 3f;
+			float column = i / 2f;
 			float lane = (i % 3) - 1f;
-			enemyOffsets[i] = new Vector2(-190f - column * 62f, lane * 66f + rng.RandfRange(-28f, 28f));
+			enemyOffsets[i] = new Vector2(-170f - column * 72f, lane * 48f + rng.RandfRange(-18f, 18f));
 			enemyPhase[i] = rng.RandfRange(0f, Mathf.Tau);
 		}
 	}
@@ -147,7 +147,7 @@ public partial class MenuChaseBackdrop : Node2D
 
 		float progress = Mathf.PosMod(time * RouteSpeed, 1f);
 		float x = Mathf.Lerp(-RouteStartPadding, viewport.X + RouteEndPadding, progress);
-		float y = viewport.Y * 0.5f + Mathf.Sin(progress * Mathf.Tau * 1.2f + 0.45f) * viewport.Y * 0.18f;
+		float y = viewport.Y * 0.64f + Mathf.Sin(progress * Mathf.Tau * 1.08f + 0.45f) * viewport.Y * 0.075f;
 		Vector2 leader = new Vector2(x, y);
 		float fade = Mathf.Clamp(Mathf.Sin(progress * Mathf.Pi), 0f, 1f);
 
@@ -162,11 +162,11 @@ public partial class MenuChaseBackdrop : Node2D
 			Texture2D[] frames = enemyFrames[i % enemyFrames.Length];
 			enemy.Texture = frames[Mathf.PosMod((int)(time * (7.5f + i * 0.2f)), frames.Length)];
 
-			float surge = Mathf.Sin(time * 2.2f + enemyPhase[i]) * 22f;
-			float wobble = Mathf.Sin(time * 4.1f + enemyPhase[i]) * 18f;
+			float surge = Mathf.Sin(time * 1.6f + enemyPhase[i]) * 14f;
+			float wobble = Mathf.Sin(time * 2.4f + enemyPhase[i]) * 12f;
 			enemy.Position = leader + enemyOffsets[i] + new Vector2(surge, wobble);
-			enemy.Rotation = Mathf.Sin(time * 6.4f + enemyPhase[i]) * 0.14f;
-			enemy.Modulate = new Color(1f, 1f, 1f, (0.32f + fade * 0.56f) * (1f - i * 0.018f));
+			enemy.Rotation = Mathf.Sin(time * 3.8f + enemyPhase[i]) * 0.09f;
+			enemy.Modulate = new Color(1f, 1f, 1f, (0.24f + fade * 0.46f) * (1f - i * 0.018f));
 		}
 	}
 

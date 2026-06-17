@@ -39,6 +39,7 @@ public partial class NPCFish : CharacterBody2D
 	[Export] public float ApproachOffsetStrength = 100f;
 	[Export] public float CollisionRadius = 40f;
 	[Export] public float SandBoundaryExtraPadding = 4f;
+	[Export] public float WaterSurfaceExtraPadding = 12f;
 	[Export] public float SandBoundaryPushSpeed = 210f;
 	[Export] public EnemySkin Skin = EnemySkin.Gegnerfisch;
 
@@ -209,12 +210,25 @@ public partial class NPCFish : CharacterBody2D
 
 	private void UpdateFleeMovement(float dt, Main main)
 	{
-		Vector2 awayFromPlayer = (Position - Player.Position);
+		Vector2 awayFromPlayer = Position - Player.Position;
 
 		if (awayFromPlayer.LengthSquared() < 1f)
 			awayFromPlayer = Vector2.FromAngle(rng.RandfRange(0f, Mathf.Tau));
 
-		awayFromPlayer = awayFromPlayer.Normalized();
+		float horizontalSign = awayFromPlayer.X < 0f ? -1f : 1f;
+		Vector2 fleeDir = new Vector2(horizontalSign, 0f);
+
+		float minY = OceanMapBackground.WorldPlayerMinY + WaterSurfaceExtraPadding;
+		float maxY = SandBoundary.GetMaxSwimY(this, Position.X, CollisionRadius + SandBoundaryExtraPadding);
+		float centerY = (minY + maxY) * 0.5f;
+		float verticalPressure = 0f;
+
+		if (Position.Y < minY + 90f)
+			verticalPressure = 0.42f;
+		else if (Position.Y > maxY - 90f)
+			verticalPressure = -0.42f;
+		else
+			verticalPressure = Mathf.Clamp((centerY - Position.Y) / 620f, -0.18f, 0.18f);
 
 		Vector2 separation = Vector2.Zero;
 
@@ -231,7 +245,7 @@ public partial class NPCFish : CharacterBody2D
 
 		separation *= SeparationStrength * 0.35f;
 
-		Vector2 fleeDir = (awayFromPlayer + separation).Normalized();
+		fleeDir = (fleeDir + Vector2.Up * -verticalPressure + separation * 0.0025f).Normalized();
 		float fleeSpeed = Speed * main.NpcFleeSpeedMultiplier;
 
 		Velocity = fleeDir * fleeSpeed;
@@ -242,10 +256,11 @@ public partial class NPCFish : CharacterBody2D
 
 	private void ApplySandBoundary()
 	{
-		Velocity = SandBoundary.ClampCharacterAboveSand(
+		Velocity = SandBoundary.ClampCharacterInsideWater(
 			this,
 			Velocity,
 			CollisionRadius + SandBoundaryExtraPadding,
+			WaterSurfaceExtraPadding,
 			SandBoundaryPushSpeed
 		);
 	}

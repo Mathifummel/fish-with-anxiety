@@ -11,6 +11,7 @@ public partial class PassiveFish : CharacterBody2D
 	[Export] public float WanderTurnStrength = 0.45f;
 	[Export] public float CollisionRadius = 22f;
 	[Export] public float SandBoundaryExtraPadding = 5f;
+	[Export] public float WaterSurfaceExtraPadding = 12f;
 	[Export] public float SandBoundaryPushSpeed = 110f;
 
 	private Vector2 moveDir = Vector2.Right;
@@ -62,10 +63,11 @@ public partial class PassiveFish : CharacterBody2D
 		Velocity = currentVelocity;
 
 		MoveAndSlide();
-		currentVelocity = SandBoundary.ClampCharacterAboveSand(
+		currentVelocity = SandBoundary.ClampCharacterInsideWater(
 			this,
 			currentVelocity,
 			CollisionRadius + SandBoundaryExtraPadding,
+			WaterSurfaceExtraPadding,
 			SandBoundaryPushSpeed
 		);
 
@@ -117,7 +119,10 @@ public partial class PassiveFish : CharacterBody2D
 
 	private void RandomizeDirection()
 	{
-		moveDir = Vector2.FromAngle(rng.RandfRange(0f, Mathf.Tau));
+		moveDir = new Vector2(
+			rng.RandfRange(-1f, 1f),
+			rng.RandfRange(-0.34f, 0.34f)
+		).Normalized();
 		directionTimer = rng.RandfRange(DirectionChangeTimeMin, DirectionChangeTimeMax);
 		wanderPhase = rng.RandfRange(0f, Mathf.Tau);
 	}

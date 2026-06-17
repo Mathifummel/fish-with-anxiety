@@ -53,11 +53,14 @@ public partial class Main : Node2D
 	[Export] public float JellyfishStressWeight = 0.72f;
 	[Export] public float StressTargetPerThreat = 58f;
 	[Export] public float ContactStressTargetBonus = 28f;
+	[Export] public float LethalTouchPadding = 2f;
+	[Export] public float StressWarningStart = 40f;
+	[Export] public float StressWarningFullPressure = 92f;
 
 	[Export] public float ActivationThreshold = 0.25f;
 
 	// COUNTDOWN
-	[Export] public float CountdownDuration = 3f;
+	[Export] public float CountdownDuration = 2.25f;
 
 	// WORLD STREAMING
 	[Export] public float MinSpawnDistance = 760f;
@@ -65,25 +68,25 @@ public partial class Main : Node2D
 	[Export] public float DespawnDistance = 1900f;
 	[Export] public float MinSpawnSpacing = 170f;
 	[Export] public float SpawnWaterBoundaryMargin = 145f;
-	[Export] public float SpawnWaterTopMargin = 500f;
-	[Export] public float SpawnWaterBottomMargin = 115f;
+	[Export] public float SpawnWaterTopMargin = 470f;
+	[Export] public float SpawnWaterBottomMargin = 105f;
 	[Export] public float SpawnOutOfSightMargin = 135f;
 	[Export] public int MaxSpawnAttempts = 80;
 	[Export] public float SpawnCheckInterval = 0.35f;
 	[Export] public float SpawnMovementStep = 260f;
-	[Export] public float InitialPlayerSpawnY = 360f;
+	[Export] public float InitialPlayerSpawnY = 400f;
 
 	[Export] public int InitialNPCCount = 2;
 	[Export] public int InitialPassiveFishCount = 5;
 	[Export] public int InitialJellyfishCount = 0;
 	[Export] public int InitialCoinCount = 6;
-	[Export] public int InitialObstacleCount = 4;
+	[Export] public int InitialObstacleCount = 2;
 
 	[Export] public int TargetNPCCount = 7;
 	[Export] public int TargetPassiveFishCount = 14;
 	[Export] public int TargetJellyfishCount = 0;
 	[Export] public int TargetCoinCount = 18;
-	[Export] public int TargetObstacleCount = 10;
+	[Export] public int TargetObstacleCount = 5;
 
 	[Export] public float DirectionalEnemySpawnDistance = 980f;
 	[Export] public float DirectionalEnemySpawnSpread = 380f;
@@ -143,10 +146,14 @@ public partial class Main : Node2D
 	private Label CountdownLabel;
 	private Label LevelNoticeLabel;
 	private Label ItemEffectLabel;
+	private HBoxContainer StartItemIconRow;
 	private TextureRect ItemHintArrow;
 	private Label ItemHintText;
 	private Panel ControllerNoticePanel;
 	private TextureRect ControllerNoticeImage;
+	private int displayedExtraLifeCharges = -1;
+	private int displayedAlcoholStartItemCharges = -1;
+	private int displayedChorusStartItemCharges = -1;
 	private Label ControllerNoticeTitle;
 	private Label ControllerNoticeName;
 	private BaseButton PauseButton;
@@ -189,7 +196,6 @@ public partial class Main : Node2D
 	private float controllerNoticeTimer = 0f;
 	private float fishBubbleTimer = 0f;
 	private float jellyfishSoundTimer = 0f;
-	private float stressWarningCooldown = 0f;
 
 	private StyleBoxFlat stressFillStyle;
 	private StyleBoxFlat stressBackgroundStyle;
@@ -212,6 +218,7 @@ public partial class Main : Node2D
 	public override void _Ready()
 	{
 		GameAudio.StopMenuMusic(this);
+		GameAudio.EnsureGameplayMusic(this);
 		AddToGroup("game_main");
 		CreateBackgroundLayer();
 		CreateAudioPlayers();
@@ -270,7 +277,7 @@ public partial class Main : Node2D
 		PauseButton?.Hide();
 
 		SpawnInitialWorld();
-		GameAudio.PlayOneShot(this, GameAudio.CountdownPath, -5f);
+		GameAudio.PlayCountdown(this);
 	}
 
 	private void SetupRevivedRun(ScoreManager sm)
@@ -399,6 +406,9 @@ public partial class Main : Node2D
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 
+		if (CheckImmediateLethalTouch())
+			return;
+
 		TryUseStartItemInput();
 		ScoreLabel.Text = $"Score: {sm.CurrentScore}";
 		CoinLabel.Text = $"Münzen: {sm.CoinsThisRun}";
@@ -422,11 +432,12 @@ public partial class Main : Node2D
 
 	private void CreateAudioPlayers()
 	{
-		stressWarningPlayer = GameAudio.CreatePlayer(
+		stressWarningPlayer = GameAudio.CreateLoopPlayer(
 			this,
 			"StressWarning",
 			GameAudio.StressWarningPath,
-			-13f,
+			-52f,
+			0f,
 			false
 		);
 		alcoholMusicPlayer = GameAudio.CreateLoopPlayer(
@@ -434,8 +445,9 @@ public partial class Main : Node2D
 			"AlcoholSamba",
 			GameAudio.SambaMusicPath,
 			-7f,
-			65f,
-			false
+			0f,
+			false,
+			true
 		);
 	}
 
@@ -517,16 +529,23 @@ public partial class Main : Node2D
 		if (stressWarningPlayer == null)
 			return;
 
-		stressWarningCooldown = Mathf.Max(0f, stressWarningCooldown - dt);
+		bool active = Stress >= StressWarningStart;
 
-		if (Stress < 68f || stressWarningCooldown > 0f || stressWarningPlayer.Playing)
-			return;
+		float pressure = Mathf.Clamp(
+			(Stress - StressWarningStart) /
+			Mathf.Max(1f, StressWarningFullPressure - StressWarningStart),
+			0f,
+			1f
+		);
 
-		float pressure = Mathf.Clamp((Stress - 68f) / 28f, 0f, 1f);
-		stressWarningPlayer.VolumeDb = Mathf.Lerp(-16.5f, -8.5f, pressure);
-		stressWarningPlayer.PitchScale = Mathf.Lerp(0.96f, 1.02f, pressure);
-		stressWarningPlayer.Play();
-		stressWarningCooldown = Mathf.Lerp(3.8f, 1.45f, pressure);
+		GameAudio.UpdateStressWarningLoop(
+			stressWarningPlayer,
+			active,
+			pressure,
+			dt,
+			-19.5f,
+			-7.5f
+		);
 	}
 
 	private void StopStressWarningAudio()
@@ -535,7 +554,6 @@ public partial class Main : Node2D
 			return;
 
 		GameAudio.StopPlayer(stressWarningPlayer);
-		stressWarningCooldown = 1.25f;
 	}
 
 	private void FinishStressAudioBeforeDeath()
@@ -548,8 +566,6 @@ public partial class Main : Node2D
 			stressWarningPlayer.VolumeDb = -80f;
 			stressWarningPlayer.Stop();
 		}
-
-		stressWarningCooldown = 999f;
 	}
 
 	private void UpdateAlcoholMusic()
@@ -562,7 +578,7 @@ public partial class Main : Node2D
 		if (shouldPlay)
 		{
 			if (!alcoholMusicPlayer.Playing)
-				alcoholMusicPlayer.Play(65f);
+				alcoholMusicPlayer.Play(0f);
 
 			alcoholMusicPlayer.VolumeDb = -7f;
 			return;
@@ -1910,7 +1926,7 @@ public partial class Main : Node2D
 	{
 		GetNode<ScoreManager>("/root/ScoreManager").RegisterChorusUsed();
 		Player.GlobalPosition = FindChorusTeleportPosition();
-		GameAudio.PlayRandomBubble(this, Player.GlobalPosition, -5.5f, 1.24f);
+		GameAudio.PlayOneShot(this, GameAudio.ChorusFruitTeleportPath, -7.5f, 1.08f);
 		Stress = Mathf.Min(Stress, 55f);
 		Player.CurrentStress = Stress;
 		StressBar.Value = Stress;
@@ -2008,7 +2024,19 @@ public partial class Main : Node2D
 		GameUi.ApplyLabel(ItemEffectLabel, 17, new Color(0.88f, 1f, 0.95f));
 		ItemEffectLabel.Hide();
 
-		GetNode<CanvasLayer>("UI").AddChild(ItemEffectLabel);
+		CanvasLayer ui = GetNode<CanvasLayer>("UI");
+		ui.AddChild(ItemEffectLabel);
+
+		StartItemIconRow = new HBoxContainer();
+		StartItemIconRow.Name = "StartItemIconRow";
+		StartItemIconRow.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+		StartItemIconRow.OffsetLeft = 24f;
+		StartItemIconRow.OffsetTop = 82f;
+		StartItemIconRow.OffsetRight = 220f;
+		StartItemIconRow.OffsetBottom = 122f;
+		StartItemIconRow.AddThemeConstantOverride("separation", 8);
+		StartItemIconRow.Hide();
+		ui.AddChild(StartItemIconRow);
 	}
 
 	private void CreateItemDirectionHint()
@@ -2039,6 +2067,8 @@ public partial class Main : Node2D
 
 	private void UpdateItemEffectLabel()
 	{
+		UpdateStartItemIcons();
+
 		if (ItemEffectLabel == null)
 			return;
 
@@ -2058,28 +2088,59 @@ public partial class Main : Node2D
 			return;
 		}
 
-		if (HasStartItemCharges())
-		{
-			ItemEffectLabel.Text = $"Start-Items: {FormatStartItems()}";
-			ItemEffectLabel.Show();
-			return;
-		}
-
 		ItemEffectLabel.Hide();
 	}
 
-	private string FormatStartItems()
+	private void UpdateStartItemIcons()
 	{
-		List<string> parts = new List<string>();
+		if (StartItemIconRow == null)
+			return;
 
-		if (extraLifeCharges > 0)
-			parts.Add($"Herz x{extraLifeCharges}");
-		if (alcoholStartItemCharges > 0)
-			parts.Add($"Alkohol x{alcoholStartItemCharges}");
-		if (chorusStartItemCharges > 0)
-			parts.Add($"Chorus x{chorusStartItemCharges}");
+		if (displayedExtraLifeCharges == extraLifeCharges &&
+			displayedAlcoholStartItemCharges == alcoholStartItemCharges &&
+			displayedChorusStartItemCharges == chorusStartItemCharges)
+		{
+			StartItemIconRow.Visible = HasStartItemCharges();
+			return;
+		}
 
-		return string.Join("  ", parts);
+		displayedExtraLifeCharges = extraLifeCharges;
+		displayedAlcoholStartItemCharges = alcoholStartItemCharges;
+		displayedChorusStartItemCharges = chorusStartItemCharges;
+
+		foreach (Node child in StartItemIconRow.GetChildren())
+			child.QueueFree();
+
+		AddStartItemIcon("res://Assets/Herz.png", extraLifeCharges);
+		AddStartItemIcon("res://Assets/Alkohol.png", alcoholStartItemCharges);
+		AddStartItemIcon("res://Assets/Chorusfrucht.png", chorusStartItemCharges);
+
+		StartItemIconRow.Visible = HasStartItemCharges();
+	}
+
+	private void AddStartItemIcon(string texturePath, int charges)
+	{
+		if (StartItemIconRow == null || charges <= 0)
+			return;
+
+		TextureRect icon = new TextureRect();
+		icon.Texture = ResourceLoader.Load<Texture2D>(texturePath);
+		icon.CustomMinimumSize = new Vector2(36f, 36f);
+		icon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		icon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		icon.TextureFilter = CanvasItem.TextureFilterEnum.Nearest;
+		icon.MouseFilter = Control.MouseFilterEnum.Ignore;
+		StartItemIconRow.AddChild(icon);
+
+		if (charges <= 1)
+			return;
+
+		Label countLabel = new Label();
+		countLabel.Text = $"x{charges}";
+		countLabel.CustomMinimumSize = new Vector2(28f, 36f);
+		countLabel.VerticalAlignment = VerticalAlignment.Center;
+		GameUi.ApplyLabel(countLabel, 15, new Color(0.88f, 1f, 0.95f));
+		StartItemIconRow.AddChild(countLabel);
 	}
 
 	private void UpdateItemDirectionHint(float dt)
@@ -2616,7 +2677,7 @@ public partial class Main : Node2D
 				TargetNPCCount = 7;
 				TargetPassiveFishCount = 14;
 				TargetJellyfishCount = 0;
-				TargetObstacleCount = 10;
+				TargetObstacleCount = 5;
 				MinSpawnSpacing = 170f;
 				SpawnCheckInterval = 0.32f;
 				SpawnMovementStep = 245f;
@@ -2627,7 +2688,7 @@ public partial class Main : Node2D
 				TargetNPCCount = 9;
 				TargetPassiveFishCount = 15;
 				TargetJellyfishCount = 2;
-				TargetObstacleCount = 12;
+				TargetObstacleCount = 6;
 				MinSpawnSpacing = 178f;
 				SpawnCheckInterval = 0.28f;
 				SpawnMovementStep = 230f;
@@ -2638,7 +2699,7 @@ public partial class Main : Node2D
 				TargetNPCCount = 11;
 				TargetPassiveFishCount = 16;
 				TargetJellyfishCount = 4;
-				TargetObstacleCount = 13;
+				TargetObstacleCount = 7;
 				MinSpawnSpacing = 188f;
 				SpawnCheckInterval = 0.24f;
 				SpawnMovementStep = 215f;
@@ -2649,7 +2710,7 @@ public partial class Main : Node2D
 				TargetNPCCount = 13;
 				TargetPassiveFishCount = 18;
 				TargetJellyfishCount = 6;
-				TargetObstacleCount = 14;
+				TargetObstacleCount = 8;
 				MinSpawnSpacing = 198f;
 				SpawnCheckInterval = 0.21f;
 				SpawnMovementStep = 200f;
@@ -2660,7 +2721,7 @@ public partial class Main : Node2D
 				TargetNPCCount = 15;
 				TargetPassiveFishCount = 19;
 				TargetJellyfishCount = 8;
-				TargetObstacleCount = 15;
+				TargetObstacleCount = 9;
 				MinSpawnSpacing = 196f;
 				SpawnCheckInterval = 0.19f;
 				SpawnMovementStep = 185f;
@@ -2697,7 +2758,7 @@ public partial class Main : Node2D
 	{
 		TargetNPCCount = Mathf.Max(1, TargetNPCCount + GameDifficultySettings.NpcTargetOffset);
 		TargetJellyfishCount = Mathf.Max(0, TargetJellyfishCount + GameDifficultySettings.JellyfishTargetOffset);
-		TargetObstacleCount = Mathf.Max(3, TargetObstacleCount + GameDifficultySettings.ObstacleTargetOffset);
+		TargetObstacleCount = Mathf.Max(2, TargetObstacleCount + GameDifficultySettings.ObstacleTargetOffset);
 		MinSpawnSpacing *= GameDifficultySettings.MinSpawnSpacingMultiplier;
 		SpawnCheckInterval *= GameDifficultySettings.SpawnCheckIntervalMultiplier;
 		SpawnMovementStep *= GameDifficultySettings.SpawnMovementStepMultiplier;
@@ -2864,6 +2925,79 @@ public partial class Main : Node2D
 		return Mathf.Clamp(t, 0f, 1f);
 	}
 
+	private bool CheckImmediateLethalTouch()
+	{
+		if (Player == null ||
+			gameOverTriggered ||
+			Player.IsInvincible ||
+			invincibilityTimer > 0f)
+		{
+			return false;
+		}
+
+		if (TouchesAnyLethalSource(NPCContainer) ||
+			TouchesAnyLethalSource(PassiveFishContainer) ||
+			TouchesAnyLethalSource(JellyfishContainer))
+		{
+			Stress = 100f;
+			Player.CurrentStress = Stress;
+			StressBar.Value = Stress;
+			UpdateStressBarColor();
+			GameOver();
+			return true;
+		}
+
+		return false;
+	}
+
+	private bool TouchesAnyLethalSource(Node container)
+	{
+		if (container == null)
+			return false;
+
+		foreach (Node child in container.GetChildren())
+		{
+			if (child is not Node2D source || source.IsQueuedForDeletion())
+				continue;
+
+			float radius = GetCombinedCollisionRadius(Player, source) + LethalTouchPadding;
+			if (Player.GlobalPosition.DistanceSquaredTo(source.GlobalPosition) <= radius * radius)
+				return true;
+		}
+
+		return false;
+	}
+
+	private float GetCombinedCollisionRadius(Node2D first, Node2D second)
+	{
+		return GetCollisionRadius(first) + GetCollisionRadius(second);
+	}
+
+	private float GetCollisionRadius(Node2D node)
+	{
+		if (node == null)
+			return 0f;
+
+		CollisionShape2D collision = node.GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
+		if (collision?.Shape is CircleShape2D circle)
+		{
+			float scale = Mathf.Max(
+				Mathf.Abs(collision.GlobalScale.X),
+				Mathf.Abs(collision.GlobalScale.Y)
+			);
+			return circle.Radius * Mathf.Max(scale, 0.01f);
+		}
+
+		return node switch
+		{
+			PlayerFish player => player.CollisionRadius,
+			NPCFish npc => npc.CollisionRadius,
+			PassiveFish fish => fish.CollisionRadius,
+			Jellyfish jellyfish => jellyfish.CollisionRadius,
+			_ => 0f
+		};
+	}
+
 	public override void _PhysicsProcess(double delta)
 	{
 		if (MenuPreviewMode)
@@ -2895,7 +3029,7 @@ public partial class Main : Node2D
 				float dist = Player.Position.DistanceTo(npc.Position);
 
 				float realDist =
-					dist - (Player.CollisionRadius + npc.CollisionRadius);
+					dist - GetCombinedCollisionRadius(Player, npc);
 
 				if (realDist <= 0f)
 				{
@@ -2918,7 +3052,7 @@ public partial class Main : Node2D
 				float dist = Player.Position.DistanceTo(fish.Position);
 
 				float realDist =
-					dist - (Player.CollisionRadius + fish.CollisionRadius);
+					dist - GetCombinedCollisionRadius(Player, fish);
 
 				if (realDist <= 0f)
 				{
@@ -2956,7 +3090,7 @@ public partial class Main : Node2D
 					float dist = Player.Position.DistanceTo(jellyfish.Position);
 
 					float realDist =
-						dist - (Player.CollisionRadius + jellyfish.CollisionRadius);
+						dist - GetCombinedCollisionRadius(Player, jellyfish);
 
 					if (realDist <= 0f)
 					{
@@ -3020,14 +3154,14 @@ public partial class Main : Node2D
 		}
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
-		float playerRadius = Player.CollisionRadius;
+		float playerRadius = GetCollisionRadius(Player);
 
 		foreach (Node node in PassiveFishContainer.GetChildren())
 		{
 			if (node is not PassiveFish fish || fish.IsQueuedForDeletion())
 				continue;
 
-			float hitRadius = playerRadius + fish.CollisionRadius;
+			float hitRadius = playerRadius + GetCollisionRadius(fish);
 
 			if (Player.Position.DistanceSquaredTo(fish.Position) > hitRadius * hitRadius)
 				continue;
@@ -3080,6 +3214,37 @@ public partial class Main : Node2D
 		return true;
 	}
 
+	private void FreezeGameplayForDeath()
+	{
+		FreezeCharacter(Player);
+		FreezeContainer(NPCContainer);
+		FreezeContainer(PassiveFishContainer);
+		FreezeContainer(JellyfishContainer);
+	}
+
+	private void FreezeContainer(Node container)
+	{
+		if (container == null)
+			return;
+
+		foreach (Node node in container.GetChildren())
+		{
+			if (node is CharacterBody2D body)
+				FreezeCharacter(body);
+			else
+				node.SetPhysicsProcess(false);
+		}
+	}
+
+	private void FreezeCharacter(CharacterBody2D body)
+	{
+		if (body == null || !IsInstanceValid(body))
+			return;
+
+		body.Velocity = Vector2.Zero;
+		body.SetPhysicsProcess(false);
+	}
+
 	private void GameOver()
 	{
 		if (gameOverTriggered)
@@ -3091,21 +3256,12 @@ public partial class Main : Node2D
 		gameOverTriggered = true;
 		gameStarted = false;
 		gamePaused = false;
+		FreezeGameplayForDeath();
 		GameUi.RumbleConnectedJoypads(0.55f, 1f, 0.65f);
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
 		sm.StopScoring();
 		sm.SaveDeathState(Player.GlobalPosition, currentLevel, Stress);
-
-		Player.SetPhysicsProcess(false);
-
-		foreach (Node node in NPCContainer.GetChildren())
-			node.SetPhysicsProcess(false);
-
-		foreach (Node node in PassiveFishContainer.GetChildren())
-			node.SetPhysicsProcess(false);
-
-		SetContainerPhysics(JellyfishContainer, false);
 
 		invincibilityTimer = 0f;
 		alcoholFishTimeBonuses = 0;

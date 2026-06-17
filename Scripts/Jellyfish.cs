@@ -12,6 +12,7 @@ public partial class Jellyfish : CharacterBody2D
 	[Export] public float PulseAmplitude = 0.09f;
 	[Export] public float CollisionRadius = 32f;
 	[Export] public float SandBoundaryExtraPadding = 6f;
+	[Export] public float WaterSurfaceExtraPadding = 12f;
 	[Export] public float SandBoundaryPushSpeed = 120f;
 
 	public Node2D Player;
@@ -61,7 +62,7 @@ public partial class Jellyfish : CharacterBody2D
 
 			if (main != null && main.ShouldNpcsFlee)
 			{
-				desiredDir = GetAwayDirection(toPlayer);
+				desiredDir = GetBoundAwareFleeDirection(toPlayer);
 				speedMultiplier = 1.18f;
 			}
 			else if (distance < DetectionRadius && distance > 1f)
@@ -89,21 +90,30 @@ public partial class Jellyfish : CharacterBody2D
 		Velocity = currentVelocity;
 
 		MoveAndSlide();
-		currentVelocity = SandBoundary.ClampCharacterAboveSand(
+		currentVelocity = SandBoundary.ClampCharacterInsideWater(
 			this,
 			currentVelocity,
 			CollisionRadius + SandBoundaryExtraPadding,
+			WaterSurfaceExtraPadding,
 			SandBoundaryPushSpeed
 		);
 		UpdateVisual(dt);
 	}
 
-	private Vector2 GetAwayDirection(Vector2 toPlayer)
+	private Vector2 GetBoundAwareFleeDirection(Vector2 toPlayer)
 	{
-		if (toPlayer.LengthSquared() < 1f)
-			return Vector2.FromAngle(rng.RandfRange(0f, Mathf.Tau));
+		float horizontalSign = toPlayer.X > 0f ? -1f : 1f;
+		Vector2 direction = new Vector2(horizontalSign, 0f);
 
-		return (-toPlayer).Normalized();
+		float minY = OceanMapBackground.WorldPlayerMinY + WaterSurfaceExtraPadding;
+		float maxY = SandBoundary.GetMaxSwimY(this, GlobalPosition.X, CollisionRadius + SandBoundaryExtraPadding);
+
+		if (GlobalPosition.Y < minY + 85f)
+			direction.Y = 0.38f;
+		else if (GlobalPosition.Y > maxY - 85f)
+			direction.Y = -0.38f;
+
+		return direction.Normalized();
 	}
 
 	private Vector2 GetJellyfishSeparation()

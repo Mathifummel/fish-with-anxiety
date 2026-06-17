@@ -7,6 +7,7 @@ public partial class PartyFish : CharacterBody2D
 		Player,
 		EnemyOne,
 		EnemyTwo,
+		Jellyfish,
 		Passive,
 		Drunk
 	}
@@ -25,6 +26,7 @@ public partial class PartyFish : CharacterBody2D
 
 	public ControlMode Controls = ControlMode.None;
 	public VisualKind Visual = VisualKind.Player;
+	public string SkinId = ShopCatalog.DefaultSkinId;
 	public Vector2 AiDirection = Vector2.Zero;
 	public bool AlwaysPerfectBoost = false;
 	public bool UsesStressBoost = false;
@@ -46,6 +48,7 @@ public partial class PartyFish : CharacterBody2D
 	}
 	public Rect2 Bounds = new Rect2(new Vector2(-1600f, -1000f), new Vector2(3200f, 2000f));
 	public bool UseBounds = true;
+	public bool UseWaterBounds = false;
 
 	private Sprite2D sprite;
 	private Texture2D[] leftFrames;
@@ -61,6 +64,7 @@ public partial class PartyFish : CharacterBody2D
 	private float currentBoostMultiplier = 1f;
 	private float stunTimer = 0f;
 	private int facingDirection = 1;
+	private bool mirrorFrames = false;
 	private const float GamepadMoveDeadzone = 0.22f;
 
 	public override void _Ready()
@@ -184,6 +188,7 @@ public partial class PartyFish : CharacterBody2D
 			ResourceLoader.Load<Texture2D>("res://Assets/Bessofenerfisch1.png"),
 			ResourceLoader.Load<Texture2D>("res://Assets/Besoffenerfisch2.png")
 		};
+		mirrorFrames = false;
 
 		switch (Visual)
 		{
@@ -208,6 +213,16 @@ public partial class PartyFish : CharacterBody2D
 				CollisionRadius = 30f;
 				break;
 
+			case VisualKind.Jellyfish:
+				leftFrames = rightFrames = new Texture2D[]
+				{
+					ResourceLoader.Load<Texture2D>("res://Assets/Qualle.png"),
+					ResourceLoader.Load<Texture2D>("res://Assets/Qualle2.png")
+				};
+				sprite.Scale = new Vector2(0.74f, 0.74f);
+				CollisionRadius = 34f;
+				break;
+
 			case VisualKind.Passive:
 				leftFrames = new Texture2D[]
 				{
@@ -224,6 +239,24 @@ public partial class PartyFish : CharacterBody2D
 				break;
 
 			default:
+				if (Visual == VisualKind.Player &&
+					!string.IsNullOrEmpty(SkinId) &&
+					SkinId != ShopCatalog.DefaultSkinId)
+				{
+					SkinDefinition skin = ShopCatalog.GetSkin(SkinId);
+					Texture2D frame1 = ResourceLoader.Load<Texture2D>(skin.Frame1Path);
+					Texture2D frame2 = ResourceLoader.Load<Texture2D>(skin.Frame2Path);
+
+					if (frame1 != null && frame2 != null)
+					{
+						leftFrames = rightFrames = new Texture2D[] { frame1, frame2 };
+						mirrorFrames = true;
+						sprite.Scale = new Vector2(1.05f, 1.05f);
+						CollisionRadius = 32f;
+						break;
+					}
+				}
+
 				leftFrames = new Texture2D[]
 				{
 					ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1.png"),
@@ -361,6 +394,12 @@ public partial class PartyFish : CharacterBody2D
 
 	private void ClampToBounds()
 	{
+		if (UseWaterBounds)
+		{
+			ClampToWaterBounds();
+			return;
+		}
+
 		if (!UseBounds)
 			return;
 
@@ -368,6 +407,23 @@ public partial class PartyFish : CharacterBody2D
 		position.X = Mathf.Clamp(position.X, Bounds.Position.X, Bounds.End.X);
 		position.Y = Mathf.Clamp(position.Y, Bounds.Position.Y, Bounds.End.Y);
 		GlobalPosition = position;
+	}
+
+	private void ClampToWaterBounds()
+	{
+		Vector2 position = GlobalPosition;
+		float minY = OceanMapBackground.WorldPlayerMinY;
+		float maxY = SandBoundary.GetMaxSwimY(this, position.X, CollisionRadius + 8f);
+		float clampedMaxY = Mathf.Max(minY, maxY);
+		position.Y = Mathf.Clamp(position.Y, minY, clampedMaxY);
+		GlobalPosition = position;
+
+		if (currentVelocity.Y < 0f && Mathf.IsEqualApprox(position.Y, minY))
+			currentVelocity.Y = 0f;
+		else if (currentVelocity.Y > 0f && Mathf.IsEqualApprox(position.Y, clampedMaxY))
+			currentVelocity.Y = 0f;
+
+		Velocity = currentVelocity;
 	}
 
 	private void UpdateVisual(float dt)
@@ -425,7 +481,11 @@ public partial class PartyFish : CharacterBody2D
 		if (texture != null)
 			sprite.Texture = texture;
 
-		bool usesLeftOnlyFrames = Visual == VisualKind.EnemyOne || Visual == VisualKind.EnemyTwo || AlwaysPerfectBoost;
+		bool usesLeftOnlyFrames = Visual == VisualKind.EnemyOne ||
+			Visual == VisualKind.EnemyTwo ||
+			Visual == VisualKind.Jellyfish ||
+			mirrorFrames ||
+			AlwaysPerfectBoost;
 		sprite.FlipH = usesLeftOnlyFrames && facingDirection > 0;
 	}
 }

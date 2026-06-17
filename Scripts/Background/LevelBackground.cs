@@ -12,8 +12,8 @@ public partial class LevelBackground : Node2D
 	public const float WATER_SURFACE_Y = -80f;
 	public const float SAND_Y = 840f;
 	public const float WATER_SURFACE_STRIP_HEIGHT = 724f;
-	public const float PLAYER_SURFACE_PADDING = 38f;
-	public const float PLAYER_SAND_PADDING = 36f;
+	public const float PLAYER_SURFACE_PADDING = 26f;
+	public const float PLAYER_SAND_PADDING = 24f;
 	public const float PLAYER_MIN_Y = WATER_SURFACE_Y + PLAYER_SURFACE_PADDING;
 	public const float PLAYER_MAX_Y = SAND_Y - PLAYER_SAND_PADDING;
 

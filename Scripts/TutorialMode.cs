@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 
 public partial class TutorialMode : Node2D
 {
@@ -23,6 +24,8 @@ public partial class TutorialMode : Node2D
 	private const string TutorialSeenPath = "user://tutorial_seen.save";
 	private const float TargetRadius = 72f;
 	private const float CollectRadius = 58f;
+	private const float TutorialSpawnY = 150f;
+	private const float TutorialAlcoholDuration = 8.5f;
 
 	private CanvasLayer ui;
 	private Label titleLabel;
@@ -37,6 +40,9 @@ public partial class TutorialMode : Node2D
 	private NPCFish crossingNpc;
 	private Sprite2D warningMarker;
 	private Texture2D warningTexture;
+	private readonly List<TutorialPassiveFish> tutorialPassiveFish = new List<TutorialPassiveFish>();
+	private Texture2D[] tutorialFishLeftFrames;
+	private Texture2D[] tutorialFishRightFrames;
 
 	private TutorialPhase phase = TutorialPhase.Move;
 	private Vector2 targetPosition;
@@ -51,18 +57,38 @@ public partial class TutorialMode : Node2D
 	private OceanMapBackground backgroundMap;
 	private AudioStreamPlayer alcoholMusicPlayer;
 
+	private sealed class TutorialPassiveFish
+	{
+		public Sprite2D Sprite;
+		public Vector2 Velocity;
+		public float Phase;
+		public float Speed;
+		public bool Fleeing;
+	}
+
 	public override void _Ready()
 	{
 		GameAudio.StopMenuMusic(this);
+		GameAudio.EnsureGameplayMusic(this);
 		PlayerFish.LoadControlSettings();
 		warningTexture =
 			ResourceLoader.Load<Texture2D>("res://Assets/exclamation_spritesheet_01.png");
+		tutorialFishLeftFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2.png")
+		};
+		tutorialFishRightFrames = new Texture2D[]
+		{
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1 1.png"),
+			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2 1.png")
+		};
 		CreateBackgroundLayer();
 		CreateAudioPlayers();
 		CreateTargetMarker();
 		CreateUi();
 
-		Player.Position = Vector2.Zero;
+		Player.Position = new Vector2(0f, TutorialSpawnY);
 		Player.CurrentStress = 0f;
 		Player.SetInvincible(false);
 		Player.SpeedMultiplier = 1f;
@@ -81,6 +107,7 @@ public partial class TutorialMode : Node2D
 		AnimateTargetMarker();
 		UpdateHintArrow();
 		UpdatePhase(dt);
+		UpdateTutorialPassiveFish(dt);
 		UpdateTutorialAlcoholMusic();
 		UpdateUi();
 	}
@@ -160,6 +187,7 @@ public partial class TutorialMode : Node2D
 				stress = 20f;
 				SetTarget(Vector2.Zero, false);
 				CreateWarningMarker();
+				GameAudio.PlayOneShot(this, GameAudio.StressWarningPath, -10f, 1.08f);
 				SetText(
 					"5 / 7  Achtung",
 					"Achte auf das Warnzeichen und bleib aus der Bahn.",
@@ -170,11 +198,12 @@ public partial class TutorialMode : Node2D
 			case TutorialPhase.GoodItem:
 				stress = 66f;
 				activePickup = CreateSpritePickup("res://Assets/Alkohol.png", Player.Position + new Vector2(380f, -150f), new Vector2(1f, 1f));
+				SpawnTutorialPassiveFish();
 				SetTarget(activePickup.Position, false);
 				SetText(
 					"6 / 7  Gute Items",
 					"Folge dem Pfeil und sammle das gute Item.",
-					"Nützliche Items wie Alkohol oder Chorusfrucht können dich retten. Der Pfeil zeigt auf solche Items."
+					"Alkohol macht dich kurz unverwundbar. In echten Runs kannst du betrunken passive Fische schnappen und Bonuspunkte bekommen."
 				);
 				break;
 
@@ -227,10 +256,11 @@ public partial class TutorialMode : Node2D
 				break;
 
 			case TutorialPhase.Boost:
-				if (Player.IsBoosting)
+				if (!boostUsed && Player.IsBoosting)
 				{
 					boostUsed = true;
 					feedbackLabel.Text = "Boost aktiv. Jetzt raus aus der engen Stelle.";
+					GameAudio.PlayRandomBubble(this, Player.GlobalPosition, -7f, 1.18f);
 				}
 
 				if (boostUsed && Player.Position.DistanceTo(targetPosition) <= TargetRadius && phaseTimer > 0.6f)
@@ -279,11 +309,12 @@ public partial class TutorialMode : Node2D
 					goodItemCollected = true;
 					phaseTimer = 0f;
 					Player.SetInvincible(true);
+					SetTutorialPassiveFishFleeing();
 					stress = 0f;
-					feedbackLabel.Text = "Gutes Item! Stress weg, kurz unverwundbar.";
+					feedbackLabel.Text = "Gutes Item! Jetzt wärst du kurz stark genug, um passive Fische für Punkte zu schnappen.";
 				}
 
-				if (goodItemCollected && phaseTimer > 1.2f)
+				if (goodItemCollected && phaseTimer > TutorialAlcoholDuration)
 					StartPhase(TutorialPhase.Trash);
 				break;
 
@@ -318,8 +349,156 @@ public partial class TutorialMode : Node2D
 			return false;
 
 		activePickup.QueueFree();
+		PlayTutorialPickupSound();
 		activePickup = null;
 		return true;
+	}
+
+	private void PlayTutorialPickupSound()
+	{
+		switch (phase)
+		{
+			case TutorialPhase.GoodItem:
+				GameAudio.PlayItemPickup(this, ItemType.Alcohol, Player.GlobalPosition);
+				break;
+			case TutorialPhase.Trash:
+				GameAudio.PlayItemPickup(this, ItemType.Trash, Player.GlobalPosition);
+				break;
+			default:
+				GameAudio.PlayRandomBubble(this, Player.GlobalPosition, -7f, 1.22f);
+				break;
+		}
+	}
+
+	private void SpawnTutorialPassiveFish()
+	{
+		ClearTutorialPassiveFish();
+
+		for (int i = 0; i < 4; i++)
+		{
+			Sprite2D fish = new Sprite2D();
+			fish.Name = $"TutorialPassiveFish_{i + 1}";
+			fish.Texture = tutorialFishLeftFrames?[0];
+			fish.TextureFilter = CanvasItem.TextureFilterEnum.Nearest;
+			fish.Scale = new Vector2(0.74f, 0.74f);
+			fish.ZIndex = -2;
+			fish.Position = Player.Position + new Vector2(
+				760f + i * 118f,
+				-120f + i * 58f
+			);
+			AddChild(fish);
+
+			tutorialPassiveFish.Add(new TutorialPassiveFish
+			{
+				Sprite = fish,
+				Velocity = Vector2.Left * 90f,
+				Phase = i * 0.47f,
+				Speed = 92f + i * 11f,
+				Fleeing = false
+			});
+		}
+	}
+
+	private void SetTutorialPassiveFishFleeing()
+	{
+		for (int i = 0; i < tutorialPassiveFish.Count; i++)
+		{
+			TutorialPassiveFish fish = tutorialPassiveFish[i];
+			if (fish?.Sprite == null || !IsInstanceValid(fish.Sprite))
+				continue;
+
+			float side = fish.Sprite.GlobalPosition.X < Player.GlobalPosition.X ? -1f : 1f;
+			fish.Fleeing = true;
+			fish.Speed = 220f + i * 24f;
+			fish.Velocity = new Vector2(side, 0f) * fish.Speed;
+		}
+	}
+
+	private void UpdateTutorialPassiveFish(float dt)
+	{
+		if (tutorialPassiveFish.Count == 0 || Player == null)
+			return;
+
+		for (int i = tutorialPassiveFish.Count - 1; i >= 0; i--)
+		{
+			TutorialPassiveFish fish = tutorialPassiveFish[i];
+			if (fish?.Sprite == null || !IsInstanceValid(fish.Sprite))
+			{
+				tutorialPassiveFish.RemoveAt(i);
+				continue;
+			}
+
+			fish.Phase += dt;
+			Vector2 desired;
+
+			if (fish.Fleeing)
+			{
+				float side = fish.Sprite.GlobalPosition.X < Player.GlobalPosition.X ? -1f : 1f;
+				float minY = OceanMapBackground.WorldPlayerMinY + 38f;
+				float maxY = SandBoundary.GetMaxSwimY(this, fish.Sprite.GlobalPosition.X, 72f);
+				float yPush = 0f;
+
+				if (fish.Sprite.GlobalPosition.Y < minY + 80f)
+					yPush = 0.26f;
+				else if (fish.Sprite.GlobalPosition.Y > maxY - 100f)
+					yPush = -0.26f;
+
+				desired = new Vector2(side, yPush).Normalized() * fish.Speed;
+			}
+			else
+			{
+				Vector2 target = Player.GlobalPosition + new Vector2(170f + i * 32f, -80f + i * 42f);
+				Vector2 toTarget = target - fish.Sprite.GlobalPosition;
+				desired = toTarget.LengthSquared() > 4f
+					? toTarget.Normalized() * fish.Speed
+					: Vector2.Zero;
+			}
+
+			fish.Velocity = fish.Velocity.Lerp(desired, Mathf.Clamp(dt * 4.2f, 0f, 1f));
+			fish.Sprite.GlobalPosition += fish.Velocity * dt;
+			ClampTutorialFishToWater(fish.Sprite);
+			UpdateTutorialFishVisual(fish);
+		}
+	}
+
+	private void ClampTutorialFishToWater(Sprite2D fish)
+	{
+		Vector2 position = fish.GlobalPosition;
+		float minY = OceanMapBackground.WorldPlayerMinY + 34f;
+		float maxY = SandBoundary.GetMaxSwimY(this, position.X, 72f);
+		position.Y = Mathf.Clamp(position.Y, minY, Mathf.Max(minY, maxY));
+		fish.GlobalPosition = position;
+	}
+
+	private void UpdateTutorialFishVisual(TutorialPassiveFish fish)
+	{
+		if (fish?.Sprite == null)
+			return;
+
+		Texture2D[] frames = fish.Velocity.X >= 0f ? tutorialFishRightFrames : tutorialFishLeftFrames;
+		if (frames != null && frames.Length > 0)
+			fish.Sprite.Texture = frames[Mathf.PosMod((int)(fish.Phase * 7f), frames.Length)];
+
+		if (fish.Velocity.LengthSquared() <= 1f)
+			return;
+
+		float angle = fish.Velocity.Angle();
+		float facingAngle = fish.Velocity.X >= 0f
+			? angle
+			: Mathf.Wrap(angle - Mathf.Pi, -Mathf.Pi, Mathf.Pi);
+		float wiggle = Mathf.Sin(fish.Phase * 8f) * 0.1f;
+		fish.Sprite.Rotation = Mathf.LerpAngle(fish.Sprite.Rotation, facingAngle + wiggle, 0.18f);
+	}
+
+	private void ClearTutorialPassiveFish()
+	{
+		foreach (TutorialPassiveFish fish in tutorialPassiveFish)
+		{
+			if (fish?.Sprite != null && IsInstanceValid(fish.Sprite))
+				fish.Sprite.QueueFree();
+		}
+
+		tutorialPassiveFish.Clear();
 	}
 
 	private void SpawnTrainingNpc()
@@ -501,6 +680,7 @@ public partial class TutorialMode : Node2D
 			warningMarker.QueueFree();
 
 		warningMarker = null;
+		ClearTutorialPassiveFish();
 
 		if (Player != null)
 		{
@@ -526,8 +706,9 @@ public partial class TutorialMode : Node2D
 			"TutorialAlcoholSamba",
 			GameAudio.SambaMusicPath,
 			-7f,
-			65f,
-			false
+			0f,
+			false,
+			true
 		);
 	}
 
@@ -541,7 +722,7 @@ public partial class TutorialMode : Node2D
 		if (shouldPlay)
 		{
 			if (!alcoholMusicPlayer.Playing)
-				alcoholMusicPlayer.Play(65f);
+				alcoholMusicPlayer.Play(0f);
 
 			return;
 		}

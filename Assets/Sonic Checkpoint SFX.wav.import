@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://r16ue4c34slh"
+path="res://.godot/imported/Sonic Checkpoint SFX.wav-a112b7874c9b827203f50e2e717027ce.sample"
+
+[deps]
+
+source_file="res://Assets/Sonic Checkpoint SFX.wav"
+dest_files=["res://.godot/imported/Sonic Checkpoint SFX.wav-a112b7874c9b827203f50e2e717027ce.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2
