@@ -10,7 +10,9 @@ public partial class LevelBackground : Node2D
 	}
 
 	public const float WATER_SURFACE_Y = -80f;
-	public const float SAND_Y = 840f;
+	public const float SAND_Y = 1540f;
+	public const float DEEP_WATER_START_Y = 760f;
+	public const float DEEP_WATER_TRANSITION_HEIGHT = 340f;
 	public const float WATER_SURFACE_STRIP_HEIGHT = 724f;
 	public const float PLAYER_SURFACE_PADDING = 26f;
 	public const float PLAYER_SAND_PADDING = 24f;
@@ -19,6 +21,7 @@ public partial class LevelBackground : Node2D
 
 	private static readonly string[] SkyTexturePaths = { "res://Assets/sky_background.png", "res://Assets/Himmelneu.png" };
 	private static readonly string[] WaterTexturePaths = { "res://Assets/water_background.png", "res://Assets/wasserneu2.png" };
+	private static readonly string[] DeepWaterTexturePaths = { "res://Assets/deepdownwater.png" };
 	private static readonly string[] SandFillTexturePaths = { "res://Assets/sand_fill.png", "res://Assets/sandneu2.png" };
 	private static readonly string[] SandEdgeTexturePaths = { "res://Assets/sand_edge_strip.png", "res://Assets/sandneu2.png" };
 	private static readonly string[] WaterSurfaceTexturePaths = { "res://Assets/water_surface_strip.png", "res://Assets/Wasserrand.png" };
@@ -41,6 +44,8 @@ public partial class LevelBackground : Node2D
 	[Export] public BackgroundMode Mode = BackgroundMode.Screen;
 	[Export] public float WaterSurfaceY = WATER_SURFACE_Y;
 	[Export] public float SandY = SAND_Y;
+	[Export] public float DeepWaterStartY = DEEP_WATER_START_Y;
+	[Export] public float DeepWaterTransitionHeight = DEEP_WATER_TRANSITION_HEIGHT;
 	[Export] public float SurfaceStripHeight = WATER_SURFACE_STRIP_HEIGHT;
 	[Export] public float PlayerSurfacePadding = PLAYER_SURFACE_PADDING;
 	[Export] public float PlayerSandPadding = PLAYER_SAND_PADDING;
@@ -48,6 +53,7 @@ public partial class LevelBackground : Node2D
 
 	private Texture2D skyTexture;
 	private Texture2D waterTexture;
+	private Texture2D deepWaterTexture;
 	private Texture2D sandFillTexture;
 	private Texture2D sandEdgeTexture;
 	private Texture2D waterSurfaceTexture;
@@ -55,6 +61,7 @@ public partial class LevelBackground : Node2D
 
 	private Sprite2D skyLayer;
 	private Sprite2D waterLayer;
+	private Sprite2D deepWaterBlendLayer;
 	private Sprite2D sandFillLayer;
 	private Sprite2D sandEdgeLayer;
 	private Sprite2D waterSurfaceLayer;
@@ -180,6 +187,7 @@ public partial class LevelBackground : Node2D
 	{
 		skyTexture = LoadFirstTexture(SkyTexturePaths);
 		waterTexture = LoadFirstTexture(WaterTexturePaths);
+		deepWaterTexture = LoadFirstTexture(DeepWaterTexturePaths);
 		sandFillTexture = LoadFirstTexture(SandFillTexturePaths);
 		sandEdgeTexture = LoadFirstTextureWithCheckerTransparency(SandEdgeTexturePaths, -1);
 		waterSurfaceTexture = LoadFirstTextureWithCheckerTransparency(WaterSurfaceTexturePaths, 8);
@@ -191,6 +199,8 @@ public partial class LevelBackground : Node2D
 	{
 		skyLayer = CreateRepeatingLayer("Sky", skyTexture, -40);
 		waterLayer = CreateRepeatingLayer("WaterBackground", waterTexture, -30);
+		deepWaterBlendLayer = CreateRepeatingLayer("DeepWaterBlend", deepWaterTexture, -29);
+		deepWaterBlendLayer.Material = CreateDeepWaterBlendMaterial();
 		sandFillLayer = CreateRepeatingLayer("SandFill", sandFillTexture, -20);
 		sandEdgeLayer = CreateRepeatingLayer("SandEdge", sandEdgeTexture, -12);
 		waterSurfaceLayer = CreateRepeatingLayer("WaterSurface", waterSurfaceTexture, -10);
@@ -214,6 +224,29 @@ public partial class LevelBackground : Node2D
 		sprite.ZIndex = zIndex;
 		AddChild(sprite);
 		return sprite;
+	}
+
+	private ShaderMaterial CreateDeepWaterBlendMaterial()
+	{
+		Shader shader = new Shader();
+		shader.Code = @"
+shader_type canvas_item;
+
+uniform float blend_source_y = 0.0;
+uniform float blend_height = 520.0;
+uniform float texture_height = 1254.0;
+
+void fragment() {
+	vec4 tex = texture(TEXTURE, UV) * COLOR;
+	float local_y = clamp((UV.y * texture_height - blend_source_y) / max(blend_height, 1.0), 0.0, 1.0);
+	float eased = smoothstep(0.0, 1.0, local_y);
+	COLOR = vec4(tex.rgb, tex.a * eased);
+}
+";
+
+		ShaderMaterial material = new ShaderMaterial();
+		material.Shader = shader;
+		return material;
 	}
 
 	private void BuildDecorations()
@@ -356,7 +389,7 @@ public partial class LevelBackground : Node2D
 
 	private void UpdateLayers()
 	{
-		if (skyLayer == null || waterLayer == null || sandFillLayer == null || sandEdgeLayer == null || waterSurfaceLayer == null)
+		if (skyLayer == null || waterLayer == null || deepWaterBlendLayer == null || sandFillLayer == null || sandEdgeLayer == null || waterSurfaceLayer == null)
 			return;
 
 		if (Mode == BackgroundMode.World)
@@ -377,9 +410,15 @@ public partial class LevelBackground : Node2D
 
 		float scrollX = center.X * 0.08f + time * 6f;
 		float sandFillTop = sandEdgeTexture != null ? SandY + SandFillOverlap : SandY;
+		float deepStartY = GetDeepWaterStartY(WaterSurfaceY, SandY);
+		float transitionHeight = GetDeepWaterTransitionHeight(deepStartY, SandY);
+		float waterBottomY = SandY + SandFillOverlap;
+		float deepSourceY = WaterSourceY + time * 2.5f;
 
 		ApplyLayer(skyLayer, area.Position.X, area.Position.Y, area.Size.X, WaterSurfaceY - area.Position.Y, scrollX * 0.18f, SkySourceY);
-		ApplyLayer(waterLayer, area.Position.X, WaterSurfaceY, area.Size.X, SandY - WaterSurfaceY + SandFillOverlap, scrollX, WaterSourceY);
+		ApplyLayer(waterLayer, area.Position.X, WaterSurfaceY, area.Size.X, waterBottomY - WaterSurfaceY, scrollX, WaterSourceY);
+		ConfigureDeepWaterBlendShader(deepSourceY, transitionHeight);
+		ApplyLayer(deepWaterBlendLayer, area.Position.X, deepStartY, area.Size.X, SandY - deepStartY + SandFillOverlap, scrollX * 0.72f, deepSourceY);
 		ApplyLayer(sandFillLayer, area.Position.X, sandFillTop, area.Size.X, area.End.Y - sandFillTop, area.Position.X, 0f);
 		ApplyLayer(sandEdgeLayer, area.Position.X, SandY - SandEdgeOriginY, area.Size.X, sandEdgeTexture?.GetHeight() ?? 1f, area.Position.X, 0f);
 		ApplyLayer(waterSurfaceLayer, area.Position.X, WaterSurfaceY - WaterSurfaceOriginY, area.Size.X, SurfaceStripHeight, scrollX * 0.72f, 0f);
@@ -394,15 +433,54 @@ public partial class LevelBackground : Node2D
 		float sandY = Mathf.Round(viewport.Y * ScreenSandRatio);
 		float scrollX = time * 15f;
 		float sandFillTop = sandEdgeTexture != null ? sandY + SandFillOverlap : sandY;
+		float deepStartY = deepWaterTexture != null
+			? Mathf.Round(Mathf.Lerp(surfaceY, sandY, 0.62f))
+			: sandY + SandFillOverlap;
+		float transitionHeight = Mathf.Min(GetDeepWaterTransitionHeight(deepStartY, sandY), Mathf.Max(140f, (sandY - deepStartY) * 0.96f));
+		float deepSourceY = WaterSourceY + time * 2.5f;
 
 		Rect2 area = new Rect2(Vector2.Zero, viewport);
 
 		ApplyLayer(skyLayer, 0f, 0f, viewport.X, surfaceY, scrollX * 0.18f, SkySourceY);
 		ApplyLayer(waterLayer, 0f, surfaceY, viewport.X, sandY - surfaceY + SandFillOverlap, scrollX, WaterSourceY + Mathf.Sin(time * 0.18f) * 8f);
+		ConfigureDeepWaterBlendShader(deepSourceY, transitionHeight);
+		ApplyLayer(deepWaterBlendLayer, 0f, deepStartY, viewport.X, sandY - deepStartY + SandFillOverlap, scrollX * 0.72f, deepSourceY);
 		ApplyLayer(sandFillLayer, 0f, sandFillTop, viewport.X, viewport.Y - sandFillTop, 0f, 0f);
 		ApplyLayer(sandEdgeLayer, 0f, sandY - SandEdgeOriginY, viewport.X, sandEdgeTexture?.GetHeight() ?? 1f, 0f, 0f);
 		ApplyLayer(waterSurfaceLayer, 0f, surfaceY - WaterSurfaceOriginY, viewport.X, SurfaceStripHeight, scrollX * 0.72f, 0f);
 		UpdateDecorations(area, surfaceY, sandY);
+	}
+
+	private float GetDeepWaterStartY(float waterSurfaceY, float sandY)
+	{
+		if (deepWaterTexture == null)
+			return sandY;
+
+		float minimumStart = waterSurfaceY + 260f;
+		float maximumStart = sandY - 120f;
+		return Mathf.Clamp(DeepWaterStartY, minimumStart, Mathf.Max(minimumStart, maximumStart));
+	}
+
+	private float GetDeepWaterTransitionHeight(float deepStartY, float sandY)
+	{
+		if (deepWaterTexture == null)
+			return 0f;
+
+		float availableDepth = Mathf.Max(1f, sandY - deepStartY);
+		float sandEdgeStartY = sandY - SandEdgeOriginY;
+		float clearBeforeSandEdge = sandEdgeStartY - deepStartY - 20f;
+		float maximumHeight = Mathf.Max(180f, Mathf.Min(availableDepth * 0.82f, clearBeforeSandEdge));
+		return Mathf.Clamp(DeepWaterTransitionHeight, 180f, maximumHeight);
+	}
+
+	private void ConfigureDeepWaterBlendShader(float sourceY, float transitionHeight)
+	{
+		if (deepWaterBlendLayer?.Material is not ShaderMaterial material || deepWaterTexture == null)
+			return;
+
+		material.SetShaderParameter("blend_source_y", sourceY);
+		material.SetShaderParameter("blend_height", Mathf.Max(1f, transitionHeight));
+		material.SetShaderParameter("texture_height", Mathf.Max(1f, deepWaterTexture.GetHeight()));
 	}
 
 	private void ApplyLayer(Sprite2D sprite, float x, float y, float width, float height, float sourceX, float sourceY)

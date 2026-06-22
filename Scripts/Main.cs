@@ -126,10 +126,12 @@ public partial class Main : Node2D
 	[Export] public float ItemSpawnChance = 0.07f;
 	[Export] public float MinItemSpacing = 920f;
 	[Export] public float AlcoholDuration = 8f;
+	[Export] public float AlcoholPlayerSpeedMultiplier = 1.9f;
+	[Export] public float AlcoholEatPadding = 64f;
 	[Export] public int AlcoholFishBonusScore = 100;
 	[Export] public float AlcoholFishTimeBonus = 2f;
 	[Export] public int AlcoholFishTimeBonusLimit = 6;
-	[Export] public float NpcFleeSpeedMultiplier = 1.35f;
+	[Export] public float NpcFleeSpeedMultiplier = 0.72f;
 	[Export] public float ChorusTeleportDistance = 760f;
 	[Export] public float ChorusMinEnemyDistance = 420f;
 	[Export] public float ItemHintMinDelay = 8f;
@@ -138,7 +140,7 @@ public partial class Main : Node2D
 	[Export] public float ItemHintChance = 0.62f;
 	[Export] public float ItemHintScreenRadius = 145f;
 
-	public bool ShouldNpcsFlee => invincibilityTimer > 0f;
+	public bool ShouldNpcsFlee => IsAlcoholActive;
 
 	private ProgressBar StressBar;
 	private Label ScoreLabel;
@@ -164,6 +166,7 @@ public partial class Main : Node2D
 	private Label PauseStatusLabel;
 	private Button PauseConfirmButton;
 	private float invincibilityTimer = 0f;
+	private bool alcoholModeActive = false;
 	private int alcoholFishTimeBonuses = 0;
 
 	private float Stress = 0f;
@@ -191,6 +194,8 @@ public partial class Main : Node2D
 	private int extraLifeCharges = 0;
 	private int alcoholStartItemCharges = 0;
 	private int chorusStartItemCharges = 0;
+
+	private bool IsAlcoholActive => alcoholModeActive && invincibilityTimer > 0f;
 	private string pendingPauseCustomAction = "";
 	private float pauseConfirmationTimer = 0f;
 	private float controllerNoticeTimer = 0f;
@@ -267,7 +272,9 @@ public partial class Main : Node2D
 		currentLevel = 1;
 		Stress = 0f;
 		invincibilityTimer = 0f;
+		alcoholModeActive = false;
 		alcoholFishTimeBonuses = 0;
+		Player.AlcoholSpeedMultiplier = 1f;
 		PrepareStartItems(sm);
 		itemHintTimer = 0f;
 		ClearCrossingWarnings();
@@ -291,6 +298,7 @@ public partial class Main : Node2D
 		currentLevel = sm.SavedLevel;
 		Stress = Mathf.Clamp(sm.SavedStress, 0f, 85f);
 		invincibilityTimer = 0f;
+		alcoholModeActive = false;
 		alcoholFishTimeBonuses = 0;
 		extraLifeCharges = 0;
 		alcoholStartItemCharges = 0;
@@ -301,6 +309,7 @@ public partial class Main : Node2D
 		lastStreamPosition = Player.Position;
 		Player.SetInvincible(false);
 		Player.SpeedMultiplier = 1f;
+		Player.AlcoholSpeedMultiplier = 1f;
 		Player.SetPhysicsProcess(true);
 		CountdownLabel?.Hide();
 		itemHintTimer = 0f;
@@ -342,6 +351,7 @@ public partial class Main : Node2D
 		gameStarted = true;
 		currentLevel = 3;
 		Stress = 0f;
+		alcoholModeActive = false;
 		countdownTimer = 0f;
 		lastStreamPosition = Player.Position;
 
@@ -351,6 +361,7 @@ public partial class Main : Node2D
 
 		Player.SetPhysicsProcess(false);
 		Player.CurrentStress = 0f;
+		Player.AlcoholSpeedMultiplier = 1f;
 		CountdownLabel?.Hide();
 		HideItemDirectionHint();
 		HidePauseMenu();
@@ -573,7 +584,7 @@ public partial class Main : Node2D
 		if (alcoholMusicPlayer == null)
 			return;
 
-		bool shouldPlay = invincibilityTimer > 0f && Player != null && Player.IsInvincible;
+		bool shouldPlay = IsAlcoholActive && Player != null && Player.IsInvincible;
 
 		if (shouldPlay)
 		{
@@ -1912,13 +1923,15 @@ public partial class Main : Node2D
 	{
 		GetNode<ScoreManager>("/root/ScoreManager").RegisterAlcoholUsed();
 		invincibilityTimer = Mathf.Max(invincibilityTimer, AlcoholDuration);
+		alcoholModeActive = true;
 		alcoholFishTimeBonuses = 0;
 		Player.SetInvincible(true);
+		Player.AlcoholSpeedMultiplier = AlcoholPlayerSpeedMultiplier;
 		Stress = 0f;
 		Player.CurrentStress = 0f;
 		StressBar.Value = 0f;
 		UpdateAlcoholMusic();
-		ShowLevelNotice("Alkohol: kurz unverwundbar!");
+		ShowLevelNotice("Alkohol: schnell & gefährlich!");
 		UpdateItemEffectLabel();
 	}
 
@@ -2004,8 +2017,10 @@ public partial class Main : Node2D
 			if (invincibilityTimer <= 0f)
 			{
 				invincibilityTimer = 0f;
+				alcoholModeActive = false;
 				alcoholFishTimeBonuses = 0;
 				Player.SetInvincible(false);
+				Player.AlcoholSpeedMultiplier = 1f;
 				GameAudio.StopPlayer(alcoholMusicPlayer);
 			}
 		}
@@ -3007,11 +3022,14 @@ public partial class Main : Node2D
 			return;
 
 		float dt = (float)delta;
+		bool alcoholActive = IsAlcoholActive;
 		bool invincible = Player.IsInvincible || invincibilityTimer > 0f;
 
 		if (invincible)
 		{
-			HandleAlcoholPassiveFishCollisions();
+			if (alcoholActive)
+				HandleAlcoholFishCollisions();
+
 			Stress = Mathf.MoveToward(Stress, 0f, 95f * dt);
 			Player.CurrentStress = Stress;
 			StressBar.Value = Stress;
@@ -3144,42 +3162,75 @@ public partial class Main : Node2D
 		UpdateStressBarColor();
 	}
 
-	private void HandleAlcoholPassiveFishCollisions()
+	private void HandleAlcoholFishCollisions()
 	{
-		if (invincibilityTimer <= 0f ||
-			PassiveFishContainer == null ||
+		if (!IsAlcoholActive ||
 			Player == null)
 		{
 			return;
 		}
 
 		var sm = GetNode<ScoreManager>("/root/ScoreManager");
-		float playerRadius = GetCollisionRadius(Player);
 
-		foreach (Node node in PassiveFishContainer.GetChildren())
+		if (NPCContainer != null)
 		{
-			if (node is not PassiveFish fish || fish.IsQueuedForDeletion())
-				continue;
-
-			float hitRadius = playerRadius + GetCollisionRadius(fish);
-
-			if (Player.Position.DistanceSquaredTo(fish.Position) > hitRadius * hitRadius)
-				continue;
-
-			sm.AddBonusScore(AlcoholFishBonusScore);
-			sm.RegisterPassiveFishBonus();
-
-			if (alcoholFishTimeBonuses < AlcoholFishTimeBonusLimit)
+			foreach (Node node in NPCContainer.GetChildren())
 			{
-				alcoholFishTimeBonuses++;
-				invincibilityTimer += AlcoholFishTimeBonus;
-			}
+				if (node is not NPCFish npc || npc.IsQueuedForDeletion())
+					continue;
 
-			fish.QueueFree();
-			GameAudio.PlayRandomBubble(this, fish.GlobalPosition, -6f, 0.92f);
-			SpawnPassiveFish();
-			ShowLevelNotice($"+{AlcoholFishBonusScore} Fisch-Bonus");
+				if (!IsWithinAlcoholEatRange(npc))
+					continue;
+
+				EatAlcoholFish(npc, sm, true);
+			}
 		}
+
+		if (PassiveFishContainer != null)
+		{
+			foreach (Node node in PassiveFishContainer.GetChildren())
+			{
+				if (node is not PassiveFish fish || fish.IsQueuedForDeletion())
+					continue;
+
+				if (!IsWithinAlcoholEatRange(fish))
+					continue;
+
+				EatAlcoholFish(fish, sm, false);
+			}
+		}
+	}
+
+	private bool IsWithinAlcoholEatRange(Node2D fish)
+	{
+		float eatRadius = GetCombinedCollisionRadius(Player, fish) + AlcoholEatPadding;
+		return Player.GlobalPosition.DistanceSquaredTo(fish.GlobalPosition) <= eatRadius * eatRadius;
+	}
+
+	private void EatAlcoholFish(Node2D fish, ScoreManager sm, bool enemyFish)
+	{
+		Vector2 eatPosition = fish.GlobalPosition;
+
+		sm.AddBonusScore(AlcoholFishBonusScore);
+		sm.RegisterPassiveFishBonus();
+
+		if (alcoholFishTimeBonuses < AlcoholFishTimeBonusLimit)
+		{
+			alcoholFishTimeBonuses++;
+			invincibilityTimer += AlcoholFishTimeBonus;
+		}
+
+		fish.QueueFree();
+		GameAudio.PlayRandomBubble(this, eatPosition, enemyFish ? -4.5f : -6f, enemyFish ? 0.78f : 0.92f);
+
+		if (enemyFish)
+			SpawnNPC();
+		else
+			SpawnPassiveFish();
+
+		ShowLevelNotice(enemyFish
+			? $"+{AlcoholFishBonusScore} Gegner gefressen!"
+			: $"+{AlcoholFishBonusScore} Fisch-Bonus");
 	}
 
 	private void UpdateStressBarColor()
@@ -3264,7 +3315,9 @@ public partial class Main : Node2D
 		sm.SaveDeathState(Player.GlobalPosition, currentLevel, Stress);
 
 		invincibilityTimer = 0f;
+		alcoholModeActive = false;
 		alcoholFishTimeBonuses = 0;
+		Player.AlcoholSpeedMultiplier = 1f;
 		HideItemDirectionHint();
 		ClearCrossingWarnings();
 		HidePauseMenu();

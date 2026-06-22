@@ -98,6 +98,7 @@ public partial class PlayerFish : CharacterBody2D
 	public float CurrentStress = 0f;
 	public bool IsInvincible = false;
 	public float SpeedMultiplier = 1f;
+	public float AlcoholSpeedMultiplier = 1f;
 
 	private Sprite2D fishSprite;
 	private float slowTimer = 0f;
@@ -194,7 +195,7 @@ public partial class PlayerFish : CharacterBody2D
 			}
 		}
 
-		float targetSpeed = Speed * SpeedMultiplier;
+		float targetSpeed = Speed * SpeedMultiplier * AlcoholSpeedMultiplier;
 
 		// =========================================
 		// BOOST START
@@ -297,7 +298,7 @@ public partial class PlayerFish : CharacterBody2D
 				Mathf.Lerp(currentBoostMultiplier, 1f, easeProgress);
 
 			targetSpeed =
-				Speed * SpeedMultiplier * activeBoostMultiplier;
+				Speed * SpeedMultiplier * AlcoholSpeedMultiplier * activeBoostMultiplier;
 
 			if (boostTimer <= 0f)
 				boostActive = false;

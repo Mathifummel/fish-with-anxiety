@@ -26,6 +26,8 @@ public partial class TutorialMode : Node2D
 	private const float CollectRadius = 58f;
 	private const float TutorialSpawnY = 150f;
 	private const float TutorialAlcoholDuration = 8.5f;
+	private const float TutorialAlcoholSpeedMultiplier = 1.9f;
+	private const float TutorialAlcoholEatRadius = 142f;
 
 	private CanvasLayer ui;
 	private Label titleLabel;
@@ -38,6 +40,7 @@ public partial class TutorialMode : Node2D
 	private Node2D activePickup;
 	private NPCFish trainingNpc;
 	private NPCFish crossingNpc;
+	private NPCFish alcoholNpc;
 	private Sprite2D warningMarker;
 	private Texture2D warningTexture;
 	private readonly List<TutorialPassiveFish> tutorialPassiveFish = new List<TutorialPassiveFish>();
@@ -54,6 +57,8 @@ public partial class TutorialMode : Node2D
 	private bool goodItemCollected = false;
 	private bool boostUsed = false;
 	private bool crossingFishSpawned = false;
+	private bool alcoholNpcFleeing = false;
+	private int tutorialFishEaten = 0;
 	private OceanMapBackground backgroundMap;
 	private AudioStreamPlayer alcoholMusicPlayer;
 
@@ -92,6 +97,7 @@ public partial class TutorialMode : Node2D
 		Player.CurrentStress = 0f;
 		Player.SetInvincible(false);
 		Player.SpeedMultiplier = 1f;
+		Player.AlcoholSpeedMultiplier = 1f;
 		Player.SetPhysicsProcess(true);
 
 		StartPhase(TutorialPhase.Move);
@@ -108,6 +114,7 @@ public partial class TutorialMode : Node2D
 		UpdateHintArrow();
 		UpdatePhase(dt);
 		UpdateTutorialPassiveFish(dt);
+		UpdateTutorialAlcoholNpc(dt);
 		UpdateTutorialAlcoholMusic();
 		UpdateUi();
 	}
@@ -137,6 +144,8 @@ public partial class TutorialMode : Node2D
 		goodItemCollected = false;
 		boostUsed = false;
 		crossingFishSpawned = false;
+		alcoholNpcFleeing = false;
+		tutorialFishEaten = 0;
 
 		switch (phase)
 		{
@@ -199,11 +208,12 @@ public partial class TutorialMode : Node2D
 				stress = 66f;
 				activePickup = CreateSpritePickup("res://Assets/Alkohol.png", Player.Position + new Vector2(380f, -150f), new Vector2(1f, 1f));
 				SpawnTutorialPassiveFish();
+				SpawnTutorialAlcoholNpc();
 				SetTarget(activePickup.Position, false);
 				SetText(
 					"6 / 7  Gute Items",
 					"Folge dem Pfeil und sammle das gute Item.",
-					"Alkohol macht dich kurz unverwundbar. In echten Runs kannst du betrunken passive Fische schnappen und Bonuspunkte bekommen."
+					"Alkohol macht dich kurz schneller. Betrunken kannst du Gegnerfische und passive Fische direkt schnappen."
 				);
 				break;
 
@@ -221,6 +231,7 @@ public partial class TutorialMode : Node2D
 			case TutorialPhase.Finish:
 				Player.SetPhysicsProcess(false);
 				Player.SpeedMultiplier = 1f;
+				Player.AlcoholSpeedMultiplier = 1f;
 				Player.SetInvincible(false);
 				stress = 0f;
 				SaveTutorialSeen();
@@ -309,12 +320,23 @@ public partial class TutorialMode : Node2D
 					goodItemCollected = true;
 					phaseTimer = 0f;
 					Player.SetInvincible(true);
+					Player.AlcoholSpeedMultiplier = TutorialAlcoholSpeedMultiplier;
 					SetTutorialPassiveFishFleeing();
+					SetTutorialAlcoholNpcFleeing();
 					stress = 0f;
-					feedbackLabel.Text = "Gutes Item! Jetzt wärst du kurz stark genug, um passive Fische für Punkte zu schnappen.";
+					SetTarget(Vector2.Zero, false);
+					feedbackLabel.Text = "Alkohol aktiv: Du bist schnell. Berühre einen Gegner oder Fisch kurz, dann schnappst du ihn direkt.";
 				}
 
-				if (goodItemCollected && phaseTimer > TutorialAlcoholDuration)
+				if (goodItemCollected)
+				{
+					TryEatTutorialAlcoholFish();
+					progressLabel.Text = $"Geschnappt: {tutorialFishEaten}/2";
+				}
+
+				if (goodItemCollected &&
+					((tutorialFishEaten >= 2 && phaseTimer > 1.2f) ||
+					phaseTimer > TutorialAlcoholDuration))
 					StartPhase(TutorialPhase.Trash);
 				break;
 
@@ -414,6 +436,30 @@ public partial class TutorialMode : Node2D
 		}
 	}
 
+	private void SpawnTutorialAlcoholNpc()
+	{
+		if (NPCFishScene == null)
+			return;
+
+		alcoholNpc = NPCFishScene.Instantiate<NPCFish>();
+		alcoholNpc.Player = Player;
+		alcoholNpc.Speed = 105f;
+		alcoholNpc.Position = Player.Position + new Vector2(640f, -18f);
+		alcoholNpc.SetPhysicsProcess(false);
+		AddChild(alcoholNpc);
+	}
+
+	private void SetTutorialAlcoholNpcFleeing()
+	{
+		if (alcoholNpc == null || !IsInstanceValid(alcoholNpc))
+			return;
+
+		alcoholNpcFleeing = true;
+		alcoholNpc.Speed = 142f;
+		float side = alcoholNpc.GlobalPosition.X < Player.GlobalPosition.X ? -1f : 1f;
+		alcoholNpc.Velocity = new Vector2(side, 0f) * alcoholNpc.Speed;
+	}
+
 	private void UpdateTutorialPassiveFish(float dt)
 	{
 		if (tutorialPassiveFish.Count == 0 || Player == null)
@@ -458,6 +504,86 @@ public partial class TutorialMode : Node2D
 			fish.Sprite.GlobalPosition += fish.Velocity * dt;
 			ClampTutorialFishToWater(fish.Sprite);
 			UpdateTutorialFishVisual(fish);
+		}
+	}
+
+	private void UpdateTutorialAlcoholNpc(float dt)
+	{
+		if (alcoholNpc == null || !IsInstanceValid(alcoholNpc) || Player == null)
+			return;
+
+		Vector2 desired;
+
+		if (alcoholNpcFleeing)
+		{
+			float side = alcoholNpc.GlobalPosition.X < Player.GlobalPosition.X ? -1f : 1f;
+			float minY = OceanMapBackground.WorldPlayerMinY + 42f;
+			float maxY = SandBoundary.GetMaxSwimY(this, alcoholNpc.GlobalPosition.X, 72f);
+			float yPush = 0f;
+
+			if (alcoholNpc.GlobalPosition.Y < minY + 80f)
+				yPush = 0.24f;
+			else if (alcoholNpc.GlobalPosition.Y > maxY - 100f)
+				yPush = -0.24f;
+
+			desired = new Vector2(side, yPush).Normalized() * alcoholNpc.Speed;
+		}
+		else
+		{
+			Vector2 target = Player.GlobalPosition + new Vector2(230f, 18f);
+			Vector2 toTarget = target - alcoholNpc.GlobalPosition;
+			desired = toTarget.LengthSquared() > 4f
+				? toTarget.Normalized() * alcoholNpc.Speed
+				: Vector2.Zero;
+		}
+
+		alcoholNpc.Velocity = alcoholNpc.Velocity.Lerp(desired, Mathf.Clamp(dt * 4.2f, 0f, 1f));
+		alcoholNpc.GlobalPosition += alcoholNpc.Velocity * dt;
+
+		Vector2 position = alcoholNpc.GlobalPosition;
+		float minSwimY = OceanMapBackground.WorldPlayerMinY + 42f;
+		float maxSwimY = SandBoundary.GetMaxSwimY(this, position.X, 72f);
+		position.Y = Mathf.Clamp(position.Y, minSwimY, Mathf.Max(minSwimY, maxSwimY));
+		alcoholNpc.GlobalPosition = position;
+	}
+
+	private void TryEatTutorialAlcoholFish()
+	{
+		if (Player == null || !Player.IsInvincible)
+			return;
+
+		if (alcoholNpc != null &&
+			IsInstanceValid(alcoholNpc) &&
+			!alcoholNpc.IsQueuedForDeletion() &&
+			Player.GlobalPosition.DistanceSquaredTo(alcoholNpc.GlobalPosition) <= TutorialAlcoholEatRadius * TutorialAlcoholEatRadius)
+		{
+			Vector2 eatPosition = alcoholNpc.GlobalPosition;
+			alcoholNpc.QueueFree();
+			alcoholNpc = null;
+			tutorialFishEaten++;
+			GameAudio.PlayRandomBubble(this, eatPosition, -4.5f, 0.78f);
+			feedbackLabel.Text = "Gegner geschnappt. Genau so funktioniert es betrunken im echten Run.";
+		}
+
+		for (int i = tutorialPassiveFish.Count - 1; i >= 0; i--)
+		{
+			TutorialPassiveFish fish = tutorialPassiveFish[i];
+
+			if (fish?.Sprite == null || !IsInstanceValid(fish.Sprite))
+			{
+				tutorialPassiveFish.RemoveAt(i);
+				continue;
+			}
+
+			if (Player.GlobalPosition.DistanceSquaredTo(fish.Sprite.GlobalPosition) > TutorialAlcoholEatRadius * TutorialAlcoholEatRadius)
+				continue;
+
+			Vector2 eatPosition = fish.Sprite.GlobalPosition;
+			fish.Sprite.QueueFree();
+			tutorialPassiveFish.RemoveAt(i);
+			tutorialFishEaten++;
+			GameAudio.PlayRandomBubble(this, eatPosition, -6f, 0.92f);
+			feedbackLabel.Text = "Fisch geschnappt. Ein kurzer Kontakt reicht, du musst nicht kleben bleiben.";
 		}
 	}
 
@@ -676,6 +802,12 @@ public partial class TutorialMode : Node2D
 
 		crossingNpc = null;
 
+		if (alcoholNpc != null && IsInstanceValid(alcoholNpc))
+			alcoholNpc.QueueFree();
+
+		alcoholNpc = null;
+		alcoholNpcFleeing = false;
+
 		if (warningMarker != null && IsInstanceValid(warningMarker))
 			warningMarker.QueueFree();
 
@@ -686,6 +818,7 @@ public partial class TutorialMode : Node2D
 		{
 			Player.SetInvincible(false);
 			Player.SpeedMultiplier = 1f;
+			Player.AlcoholSpeedMultiplier = 1f;
 		}
 
 		UpdateTutorialAlcoholMusic();

@@ -79,7 +79,7 @@ public partial class MainMenu : Control
 		SceneTransition.FadeIn(GetTree(), 0.28f);
 	}
 
-	public override void _Process(double delta)
+	public override void _Process(double delta) 
 	{
 		float dt = (float)delta;
 		SyncConnectedJoypads();
