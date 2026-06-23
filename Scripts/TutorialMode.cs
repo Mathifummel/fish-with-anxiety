@@ -704,7 +704,6 @@ public partial class TutorialMode : Node2D
 		crossingNpc.Player = Player;
 		crossingNpc.Mode = NPCFish.MovementMode.Crossing;
 		crossingNpc.CrossingDirection = Vector2.Right;
-		crossingNpc.CrossingLifetime = 3.2f;
 		crossingNpc.Speed = 520f;
 
 		Vector2 viewport = GetViewportRect().Size;

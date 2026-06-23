@@ -215,7 +215,6 @@ public partial class Main : Node2D
 		public Sprite2D Marker;
 		public Vector2 SpawnPosition;
 		public Vector2 Direction;
-		public float Lifetime;
 		public float Timer;
 		public float SpeedBoost;
 	}
@@ -1416,7 +1415,6 @@ public partial class Main : Node2D
 			Marker = CreateCrossingWarningMarker(spawnPosition),
 			SpawnPosition = spawnPosition,
 			Direction = crossingDirection,
-			Lifetime = (float)GD.RandRange(4.4f, 6.5f),
 			Timer = CrossingWarningDuration,
 			SpeedBoost = GetCrossingEnemySpeedBoost()
 		};
@@ -1473,7 +1471,6 @@ public partial class Main : Node2D
 		npc.Player = Player;
 		npc.Mode = NPCFish.MovementMode.Crossing;
 		npc.CrossingDirection = warning.Direction;
-		npc.CrossingLifetime = warning.Lifetime;
 		npc.Speed *= npcSpeedMultiplier * warning.SpeedBoost * CrossingSpeedMultiplier;
 		npc.SetPhysicsProcess(gameStarted);
 

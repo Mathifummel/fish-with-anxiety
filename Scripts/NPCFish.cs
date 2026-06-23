@@ -42,11 +42,14 @@ public partial class NPCFish : CharacterBody2D
 	[Export] public float WaterSurfaceExtraPadding = 12f;
 	[Export] public float SandBoundaryPushSpeed = 210f;
 	[Export] public EnemySkin Skin = EnemySkin.Gegnerfisch;
+	[Export] public float CrossingDespawnDistance = 2300f;
+	[Export] public float CrossingMaxLifetime = 18f;
+	[Export] public float CrossingObstacleTurnStrength = 0.72f;
+	[Export] public float CrossingBoundaryTurnStrength = 0.38f;
 
 	public Node2D Player; // assigned from Main
 	public MovementMode Mode = MovementMode.Chase;
 	public Vector2 CrossingDirection = Vector2.Right;
-	public float CrossingLifetime = 5.5f;
 
 	private Sprite2D fishSprite;
 	private float swimTime = 0f;
@@ -56,6 +59,8 @@ public partial class NPCFish : CharacterBody2D
 
 	private float boostTimer = 0f;
 	private float boostCooldownTimer = 0f;
+	private float crossingAge = 0f;
+	private float crossingAvoidSign = 0f;
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
 
 	public override void _Ready()
@@ -194,18 +199,105 @@ public partial class NPCFish : CharacterBody2D
 
 	private void UpdateCrossingMovement(float dt)
 	{
-		CrossingLifetime -= dt;
+		crossingAge += dt;
 
-		if (CrossingLifetime <= 0f)
+		if (ShouldDespawnCrossingFish())
 		{
 			QueueFree();
 			return;
 		}
 
-		Velocity = CrossingDirection.Normalized() * Speed;
+		Vector2 direction = GetCrossingDirectionWithBoundaryAvoidance(dt);
+		Velocity = direction * Speed;
 		MoveAndSlide();
 		ApplySandBoundary();
+		SteerCrossingAroundObstacles(direction);
 		UpdateRotation(dt);
+	}
+
+	private bool ShouldDespawnCrossingFish()
+	{
+		if (Player == null || !IsInstanceValid(Player))
+			return crossingAge >= CrossingMaxLifetime;
+
+		Vector2 fromPlayer = GlobalPosition - Player.GlobalPosition;
+		Vector2 forward = CrossingDirection.LengthSquared() > 0.01f
+			? CrossingDirection.Normalized()
+			: Vector2.Right;
+		bool passedPlayer = fromPlayer.Dot(forward) > CrossingDespawnDistance * 0.62f;
+		bool farAway = fromPlayer.LengthSquared() > CrossingDespawnDistance * CrossingDespawnDistance;
+
+		return (passedPlayer && farAway) || crossingAge >= CrossingMaxLifetime;
+	}
+
+	private Vector2 GetCrossingDirectionWithBoundaryAvoidance(float dt)
+	{
+		Vector2 direction = CrossingDirection.LengthSquared() > 0.01f
+			? CrossingDirection.Normalized()
+			: Vector2.Right;
+
+		float minY = OceanMapBackground.WorldPlayerMinY + WaterSurfaceExtraPadding + 32f;
+		float maxY = SandBoundary.GetMaxSwimY(this, GlobalPosition.X, CollisionRadius + SandBoundaryExtraPadding + 32f);
+		float boundaryPush = 0f;
+
+		if (GlobalPosition.Y < minY + 120f)
+			boundaryPush = 1f - ((GlobalPosition.Y - minY) / 120f);
+		else if (GlobalPosition.Y > maxY - 120f)
+			boundaryPush = -1f + ((maxY - GlobalPosition.Y) / 120f);
+
+		if (Mathf.Abs(boundaryPush) > 0.01f)
+		{
+			Vector2 target = (direction + Vector2.Down * Mathf.Clamp(boundaryPush, -1f, 1f)).Normalized();
+			direction = direction.Lerp(target, Mathf.Clamp(dt * 5f * CrossingBoundaryTurnStrength, 0f, 1f)).Normalized();
+			CrossingDirection = direction;
+		}
+
+		return direction;
+	}
+
+	private void SteerCrossingAroundObstacles(Vector2 previousDirection)
+	{
+		int collisionCount = GetSlideCollisionCount();
+
+		if (collisionCount <= 0)
+			return;
+
+		Vector2 direction = previousDirection.LengthSquared() > 0.01f
+			? previousDirection.Normalized()
+			: CrossingDirection.Normalized();
+		Vector2 steer = Vector2.Zero;
+
+		for (int i = 0; i < collisionCount; i++)
+		{
+			KinematicCollision2D collision = GetSlideCollision(i);
+			if (collision == null)
+				continue;
+
+			Vector2 normal = collision.GetNormal();
+			Vector2 tangent = new Vector2(-normal.Y, normal.X);
+
+			if (tangent.LengthSquared() < 0.01f)
+				continue;
+
+			if (crossingAvoidSign == 0f)
+				crossingAvoidSign = rng.Randf() < 0.5f ? -1f : 1f;
+
+			Vector2 preferredTangent = tangent * crossingAvoidSign;
+
+			if (preferredTangent.Dot(direction) < -0.12f)
+				preferredTangent = -preferredTangent;
+
+			steer += preferredTangent.Normalized() * 1.25f + normal * 0.28f;
+		}
+
+		if (steer.LengthSquared() <= 0.01f)
+			return;
+
+		Vector2 targetDirection = (direction * 0.72f + steer.Normalized()).Normalized();
+		CrossingDirection = direction.Lerp(
+			targetDirection,
+			Mathf.Clamp(CrossingObstacleTurnStrength, 0.05f, 1f)
+		).Normalized();
 	}
 
 	private void UpdateFleeMovement(float dt, Main main)
