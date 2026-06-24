@@ -37,6 +37,8 @@ public partial class PartyMode : Control
 	private Label scoreLabel;
 	private ProgressBar catchStressBar;
 	private StyleBoxFlat catchStressFillStyle;
+	private ProgressBar biteBoostBar;
+	private StyleBoxFlat biteBoostFillStyle;
 	private Label announcementLabel;
 	private Label announcementSubLabel;
 	private PanelContainer resultPanel;
@@ -96,6 +98,7 @@ public partial class PartyMode : Control
 	private float catchPassiveSpeedMultiplier = 1f;
 	private int catchLevel = 1;
 	private int lastRoundWinner = 0;
+	private int lastRoundTimeWarning = int.MaxValue;
 	private bool catchStressAudioActive = false;
 	private string statusText = "";
 	private string lastRoundReason = "";
@@ -163,6 +166,7 @@ public partial class PartyMode : Control
 		if (state == RoundState.Playing)
 		{
 			roundTimer -= dt;
+			UpdateRoundTimeWarnings();
 			if (roundTimer <= 0f)
 				EndRoundByTimer();
 			return;
@@ -326,6 +330,14 @@ public partial class PartyMode : Control
 		catchStressBar.OffsetTop = 132f;
 		catchStressBar.OffsetBottom = 150f;
 		AddChild(catchStressBar);
+
+		biteBoostBar = CreateBiteBoostBar();
+		biteBoostBar.SetAnchorsPreset(LayoutPreset.TopRight);
+		biteBoostBar.OffsetLeft = -258f;
+		biteBoostBar.OffsetRight = -18f;
+		biteBoostBar.OffsetTop = 132f;
+		biteBoostBar.OffsetBottom = 150f;
+		AddChild(biteBoostBar);
 
 		announcementLabel = CreateLabel("", 86, new Color(1f, 0.95f, 0.38f));
 		announcementLabel.HorizontalAlignment = HorizontalAlignment.Center;
@@ -507,6 +519,40 @@ public partial class PartyMode : Control
 		return bar;
 	}
 
+	private ProgressBar CreateBiteBoostBar()
+	{
+		ProgressBar bar = new ProgressBar();
+		bar.MinValue = 0f;
+		bar.MaxValue = 100f;
+		bar.Value = 100f;
+		bar.ShowPercentage = false;
+		bar.CustomMinimumSize = new Vector2(220f, 17f);
+		bar.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+
+		StyleBoxFlat background = new StyleBoxFlat();
+		background.BgColor = new Color(0.04f, 0.09f, 0.13f, 0.78f);
+		background.BorderColor = new Color(1f, 1f, 1f, 0.45f);
+		background.BorderWidthLeft = 1;
+		background.BorderWidthTop = 1;
+		background.BorderWidthRight = 1;
+		background.BorderWidthBottom = 1;
+		background.CornerRadiusTopLeft = 6;
+		background.CornerRadiusTopRight = 6;
+		background.CornerRadiusBottomLeft = 6;
+		background.CornerRadiusBottomRight = 6;
+
+		biteBoostFillStyle = new StyleBoxFlat();
+		biteBoostFillStyle.BgColor = new Color(1f, 0.74f, 0.2f);
+		biteBoostFillStyle.CornerRadiusTopLeft = 5;
+		biteBoostFillStyle.CornerRadiusTopRight = 5;
+		biteBoostFillStyle.CornerRadiusBottomLeft = 5;
+		biteBoostFillStyle.CornerRadiusBottomRight = 5;
+
+		bar.AddThemeStyleboxOverride("background", background);
+		bar.AddThemeStyleboxOverride("fill", biteBoostFillStyle);
+		return bar;
+	}
+
 	private void RestartMatch()
 	{
 		p1MatchScore = 0;
@@ -533,6 +579,7 @@ public partial class PartyMode : Control
 		p1RoundScore = 0;
 		p2RoundScore = 0;
 		introTimer = 3.1f;
+		lastRoundTimeWarning = int.MaxValue;
 		state = RoundState.Intro;
 		matchButtons.Hide();
 		resultPanel?.Hide();
@@ -584,6 +631,8 @@ public partial class PartyMode : Control
 		playerFish.UsesStressBoost = true;
 		playerFish.CurrentStress = 0f;
 		enemyFish = CreatePartyFish(GetEnemyVisual(), PartyFish.ControlMode.Arrows, new Vector2(360f, CatchInitialSpawnY + 10f), GetOpponentSpeed());
+		enemyFish.UsesNormalBoost = false;
+		enemyFish.UsesBiteBoost = PartyState.Opponent != PartyState.OpponentSelection.Jellyfish;
 		CreateCatchWorldBackground();
 		CreateCatchAssistArrow();
 
@@ -741,7 +790,7 @@ public partial class PartyMode : Control
 
 	private float GetOpponentSpeed()
 	{
-		return PartyState.Opponent == PartyState.OpponentSelection.Jellyfish ? 226f : 242f;
+		return PartyState.Opponent == PartyState.OpponentSelection.Jellyfish ? 226f : 248f;
 	}
 
 	private void SpawnHazard(Vector2 position, params Node2D[] targets)
@@ -984,6 +1033,7 @@ public partial class PartyMode : Control
 		catchStressBar.Visible = currentGame == MiniGame.Catch && state != RoundState.MatchOver;
 		catchStressBar.Value = catchStress;
 		UpdateCatchStressBarColor();
+		UpdateBiteBoostBar();
 		UpdateAnnouncement();
 		UpdateResultPanel();
 
@@ -994,7 +1044,36 @@ public partial class PartyMode : Control
 			? "Spieler 2  |  Gegnerfisch-Team"
 			: PartyState.Opponent == PartyState.OpponentSelection.Jellyfish
 				? "Spieler 2  |  Qualle"
-				: "Spieler 2  |  Gegnerfisch";
+				: currentGame == MiniGame.Catch && enemyFish != null
+					? $"Spieler 2  |  Gegnerfisch  |  Biss {Mathf.RoundToInt(enemyFish.BiteBoostMeterValue)}%  P"
+					: "Spieler 2  |  Gegnerfisch";
+	}
+
+	private void UpdateBiteBoostBar()
+	{
+		if (biteBoostBar == null)
+			return;
+
+		bool visible = currentGame == MiniGame.Catch &&
+			state != RoundState.MatchOver &&
+			enemyFish != null &&
+			enemyFish.UsesBiteBoost;
+		biteBoostBar.Visible = visible;
+		if (!visible)
+			return;
+
+		float value = enemyFish.BiteBoostMeterValue;
+		biteBoostBar.Value = value;
+
+		if (biteBoostFillStyle == null)
+			return;
+
+		if (value >= 99f)
+			biteBoostFillStyle.BgColor = new Color(0.35f, 0.95f, 0.48f);
+		else if (value >= 50f)
+			biteBoostFillStyle.BgColor = new Color(1f, 0.74f, 0.2f);
+		else
+			biteBoostFillStyle.BgColor = new Color(1f, 0.34f, 0.31f);
 	}
 
 	private void UpdateAnnouncement()
@@ -1138,8 +1217,46 @@ public partial class PartyMode : Control
 			MiniGame.DrunkRun => "Dauer-Boost: Berührt so viele Fische wie möglich.",
 			_ => PartyState.Opponent == PartyState.OpponentSelection.Jellyfish
 				? "Die Qualle verfolgt den kleinen Fisch durch die normale Wasserwelt."
-				: "Spieler 2 verfolgt den kleinen Fisch durch die normale Wasserwelt."
+				: "Spieler 2 lädt den Biss auf und schlägt mit P nach vorne zu."
 		};
+	}
+
+	private void UpdateRoundTimeWarnings()
+	{
+		if (roundTimer <= 0f)
+			return;
+
+		int warning = GetRoundTimeWarning(Mathf.CeilToInt(roundTimer));
+		if (warning <= 0 || warning >= lastRoundTimeWarning)
+			return;
+
+		lastRoundTimeWarning = warning;
+		string title = warning == 1 ? "1 SEKUNDE" : $"{warning} SEKUNDEN";
+		statusText = $"{warning} Sekunden übrig.";
+		ShowAnnouncement(title, "übrig", warning <= 5 ? 0.72f : 0.95f);
+
+		if (warning <= 5)
+			GameAudio.PlayCountdown(this);
+	}
+
+	private int GetRoundTimeWarning(int secondsLeft)
+	{
+		if (secondsLeft <= 1)
+			return 1;
+		if (secondsLeft <= 2)
+			return 2;
+		if (secondsLeft <= 3)
+			return 3;
+		if (secondsLeft <= 4)
+			return 4;
+		if (secondsLeft <= 5)
+			return 5;
+		if (secondsLeft <= 10)
+			return 10;
+		if (secondsLeft <= 20)
+			return 20;
+
+		return 0;
 	}
 
 	private void UpdateCooldowns(float dt)
@@ -1600,7 +1717,11 @@ public partial class PartyMode : Control
 
 	private void CheckCatchRoundCollisions()
 	{
-		if (Touches(playerFish, enemyFish))
+		float enemyCatchRadius = enemyFish != null
+			? enemyFish.CollisionRadius + playerFish.CollisionRadius + enemyFish.BiteCollisionBonus
+			: 0f;
+
+		if (Touches(playerFish, enemyFish, enemyCatchRadius))
 		{
 			playerFish.Kill();
 			EndRound(
@@ -1920,6 +2041,8 @@ public partial class PartyMode : Control
 			statusText = $"Unentschieden: {reason}";
 		}
 
+		ShowAnnouncement("FERTIG!", reason, 1.15f);
+		GameAudio.PlayEndWhistle(this);
 		FreezeAllFish();
 
 		if (roundIndex >= totalRounds)

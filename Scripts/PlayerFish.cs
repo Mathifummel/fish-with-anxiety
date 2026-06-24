@@ -25,6 +25,8 @@ public partial class PlayerFish : CharacterBody2D
 	private const string BindingsSection = "bindings";
 	private static bool controlsLoaded = false;
 	private const float GamepadMoveDeadzone = 0.22f;
+	private const float BasicSkinTextureHeight = 44f;
+	private const float BasicSpriteScale = 1.15f;
 
 	// =========================================
 	// MOVEMENT
@@ -115,6 +117,7 @@ public partial class PlayerFish : CharacterBody2D
 	public override void _Ready()
 	{
 		fishSprite = GetNode<Sprite2D>("Sprite2D");
+		fishSprite.Scale = new Vector2(BasicSpriteScale, BasicSpriteScale);
 		leftSwimFrames = new Texture2D[]
 		{
 			ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1.png"),
@@ -414,6 +417,8 @@ public partial class PlayerFish : CharacterBody2D
 		if (frames == null || frames.Length == 0)
 			return;
 
+		ApplySpriteScaleForFrames(frames);
+
 		int frameIndex = Mathf.PosMod((int)(swimTime * SwimFrameRate), frames.Length);
 		Texture2D texture = frames[frameIndex];
 
@@ -423,6 +428,19 @@ public partial class PlayerFish : CharacterBody2D
 		fishSprite.FlipH = useDrunkFrames
 			? facingDirection > 0
 			: selectedSkinUsesMirroredFrames && facingDirection > 0;
+	}
+
+	private void ApplySpriteScaleForFrames(Texture2D[] frames)
+	{
+		float maxHeight = BasicSkinTextureHeight;
+		foreach (Texture2D frame in frames)
+		{
+			if (frame != null)
+				maxHeight = Mathf.Max(maxHeight, frame.GetHeight());
+		}
+
+		float normalizedScale = BasicSpriteScale * (BasicSkinTextureHeight / Mathf.Max(maxHeight, 1f));
+		fishSprite.Scale = new Vector2(normalizedScale, normalizedScale);
 	}
 
 	private void ApplySelectedSkinFrames()

@@ -30,9 +30,13 @@ public partial class PartyFish : CharacterBody2D
 	public Vector2 AiDirection = Vector2.Zero;
 	public bool AlwaysPerfectBoost = false;
 	public bool UsesStressBoost = false;
+	public bool UsesNormalBoost = true;
+	public bool UsesBiteBoost = false;
 	public bool IsEliminated = false;
 	public float CurrentStress = 0f;
-	public bool IsBoosting => AlwaysPerfectBoost || boostTimer > 0f;
+	public bool IsBoosting => AlwaysPerfectBoost || boostTimer > 0f || biteLungeTimer > 0f;
+	public bool IsBiteBoosting => biteLungeTimer > 0f;
+	public float BiteCollisionBonus => biteLungeTimer > 0f ? 22f : 0f;
 	public float BoostMeterValue
 	{
 		get
@@ -46,6 +50,9 @@ public partial class PartyFish : CharacterBody2D
 			return (1f - Mathf.Clamp(boostCooldown / maxBoostCooldown, 0f, 1f)) * 100f;
 		}
 	}
+	public float BiteBoostMeterValue => UsesBiteBoost
+		? (1f - Mathf.Clamp(biteCooldown / BiteBoostCooldown, 0f, 1f)) * 100f
+		: 100f;
 	public Rect2 Bounds = new Rect2(new Vector2(-1600f, -1000f), new Vector2(3200f, 2000f));
 	public bool UseBounds = true;
 	public bool UseWaterBounds = false;
@@ -63,9 +70,20 @@ public partial class PartyFish : CharacterBody2D
 	private float maxBoostCooldown = 1.15f;
 	private float currentBoostMultiplier = 1f;
 	private float stunTimer = 0f;
+	private float biteCooldown = 0f;
+	private float biteWindupTimer = 0f;
+	private float biteLungeTimer = 0f;
 	private int facingDirection = 1;
+	private Vector2 lastMoveDirection = Vector2.Right;
+	private Vector2 biteDirection = Vector2.Right;
 	private bool mirrorFrames = false;
 	private const float GamepadMoveDeadzone = 0.22f;
+	private const float BasicSkinTextureHeight = 44f;
+	private const float PlayerSpriteScale = 1.12f;
+	private const float BiteBoostCooldown = 10f;
+	private const float BiteWindupDuration = 0.32f;
+	private const float BiteLungeDuration = 0.24f;
+	private const float BiteLungeSpeed = 1060f;
 
 	public override void _Ready()
 	{
@@ -87,18 +105,42 @@ public partial class PartyFish : CharacterBody2D
 		if (boostCooldown > 0f)
 			boostCooldown -= dt;
 
+		if (biteCooldown > 0f)
+			biteCooldown -= dt;
+
 		if (boostTimer > 0f)
 			boostTimer -= dt;
+
+		if (biteWindupTimer > 0f)
+		{
+			biteWindupTimer -= dt;
+			if (biteWindupTimer <= 0f)
+				StartBiteLunge();
+		}
+
+		if (biteLungeTimer > 0f)
+			biteLungeTimer -= dt;
 
 		if (stunTimer > 0f)
 			stunTimer -= dt;
 
-		if (!AlwaysPerfectBoost && boostCooldown <= 0f && IsBoostPressed())
+		if (UsesBiteBoost &&
+			biteCooldown <= 0f &&
+			biteWindupTimer <= 0f &&
+			biteLungeTimer <= 0f &&
+			IsBiteBoostPressed())
+		{
+			StartBiteWindup();
+		}
+		else if (UsesNormalBoost && !AlwaysPerfectBoost && boostCooldown <= 0f && IsBoostPressed())
 		{
 			StartBoost();
 		}
 
 		Vector2 direction = GetMoveDirection();
+		if (direction != Vector2.Zero)
+			lastMoveDirection = direction;
+
 		float speed = BaseSpeed;
 
 		if (AlwaysPerfectBoost)
@@ -120,7 +162,13 @@ public partial class PartyFish : CharacterBody2D
 			speed *= 0.28f;
 
 		Vector2 targetVelocity = direction * speed;
-		currentVelocity = currentVelocity.Lerp(targetVelocity, Mathf.Clamp(7.2f * dt, 0f, 1f));
+		if (biteWindupTimer > 0f)
+			targetVelocity = Vector2.Zero;
+		else if (biteLungeTimer > 0f)
+			targetVelocity = biteDirection * BiteLungeSpeed;
+
+		float acceleration = biteLungeTimer > 0f ? 1f : Mathf.Clamp(7.2f * dt, 0f, 1f);
+		currentVelocity = currentVelocity.Lerp(targetVelocity, acceleration);
 		Velocity = currentVelocity;
 		MoveAndSlide();
 		ClampToBounds();
@@ -157,6 +205,11 @@ public partial class PartyFish : CharacterBody2D
 	public void Respawn(Vector2 position)
 	{
 		GlobalPosition = position;
+		boostTimer = 0f;
+		boostCooldown = 0f;
+		biteWindupTimer = 0f;
+		biteLungeTimer = 0f;
+		biteCooldown = 0f;
 		SetEliminated(false);
 	}
 
@@ -251,7 +304,7 @@ public partial class PartyFish : CharacterBody2D
 					{
 						leftFrames = rightFrames = new Texture2D[] { frame1, frame2 };
 						mirrorFrames = true;
-						sprite.Scale = new Vector2(1.05f, 1.05f);
+						ApplyPlayerSpriteScale(leftFrames);
 						CollisionRadius = 32f;
 						break;
 					}
@@ -267,10 +320,23 @@ public partial class PartyFish : CharacterBody2D
 					ResourceLoader.Load<Texture2D>("res://Assets/Fisch_1 1.png"),
 					ResourceLoader.Load<Texture2D>("res://Assets/Fisch_2 1.png")
 				};
-				sprite.Scale = new Vector2(1.12f, 1.12f);
+				ApplyPlayerSpriteScale(leftFrames);
 				CollisionRadius = 32f;
 				break;
 		}
+	}
+
+	private void ApplyPlayerSpriteScale(Texture2D[] frames)
+	{
+		float maxHeight = BasicSkinTextureHeight;
+		foreach (Texture2D frame in frames)
+		{
+			if (frame != null)
+				maxHeight = Mathf.Max(maxHeight, frame.GetHeight());
+		}
+
+		float normalizedScale = PlayerSpriteScale * (BasicSkinTextureHeight / Mathf.Max(maxHeight, 1f));
+		sprite.Scale = new Vector2(normalizedScale, normalizedScale);
 	}
 
 	private Vector2 GetMoveDirection()
@@ -296,18 +362,17 @@ public partial class PartyFish : CharacterBody2D
 
 	private bool IsBoostPressed()
 	{
-		if ((Controls == ControlMode.Wasd || Controls == ControlMode.Arrows) &&
-			Input.IsActionJustPressed("ui_accept"))
-		{
-			return true;
-		}
-
 		return Controls switch
 		{
 			ControlMode.Wasd => Input.IsKeyPressed(Key.Space),
 			ControlMode.Arrows => Input.IsKeyPressed(Key.Enter),
 			_ => false
 		};
+	}
+
+	private bool IsBiteBoostPressed()
+	{
+		return Controls == ControlMode.Arrows && Input.IsKeyPressed(Key.P);
 	}
 
 	private Vector2 GetGamepadDirection()
@@ -375,6 +440,23 @@ public partial class PartyFish : CharacterBody2D
 		GameAudio.PlayBoost(this);
 	}
 
+	private void StartBiteWindup()
+	{
+		biteDirection = lastMoveDirection == Vector2.Zero
+			? new Vector2(facingDirection, 0f)
+			: lastMoveDirection.Normalized();
+		biteWindupTimer = BiteWindupDuration;
+		biteCooldown = BiteBoostCooldown;
+		GameAudio.PlayBoost(this);
+	}
+
+	private void StartBiteLunge()
+	{
+		biteWindupTimer = 0f;
+		biteLungeTimer = BiteLungeDuration;
+		currentVelocity = biteDirection * BiteLungeSpeed;
+	}
+
 	private Vector2 GetKeyDirection(Key up, Key down, Key left, Key right)
 	{
 		Vector2 direction = Vector2.Zero;
@@ -433,7 +515,7 @@ public partial class PartyFish : CharacterBody2D
 		if (sprite == null)
 			return;
 
-		if (Velocity.Length() <= 0.1f)
+		if (Velocity.Length() <= 0.1f && biteWindupTimer <= 0f)
 		{
 			sprite.Position = Vector2.Zero;
 			return;
@@ -453,13 +535,15 @@ public partial class PartyFish : CharacterBody2D
 			? moveAngle
 			: Mathf.Wrap(moveAngle - Mathf.Pi, -Mathf.Pi, Mathf.Pi);
 		float wiggle = Mathf.Sin(swimTime * 7.2f) * (AlwaysPerfectBoost ? 0.34f : 0.18f);
-		float shake = AlwaysPerfectBoost
-			? Mathf.Sin(swimTime * 22f + GetInstanceId()) * 0.12f
-			: 0f;
+		float shake = AlwaysPerfectBoost || biteWindupTimer > 0f
+			? Mathf.Sin(swimTime * 28f + GetInstanceId()) * (biteWindupTimer > 0f ? 0.22f : 0.12f)
+			: biteLungeTimer > 0f
+				? Mathf.Sin(swimTime * 40f + GetInstanceId()) * 0.08f
+				: 0f;
 
 		sprite.Rotation = Mathf.LerpAngle(sprite.Rotation, targetRotation + wiggle + shake, Mathf.Clamp(dt * 6f, 0f, 1f));
-		sprite.Position = AlwaysPerfectBoost
-			? new Vector2(0f, Mathf.Sin(swimTime * 28f + GetInstanceId()) * 3.5f)
+		sprite.Position = AlwaysPerfectBoost || biteWindupTimer > 0f
+			? new Vector2(0f, Mathf.Sin(swimTime * 34f + GetInstanceId()) * (biteWindupTimer > 0f ? 5.5f : 3.5f))
 			: Vector2.Zero;
 	}
 

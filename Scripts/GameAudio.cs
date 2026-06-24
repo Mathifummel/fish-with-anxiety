@@ -16,6 +16,7 @@ public static class GameAudio
 	public const string UiButtonPath = "res://Assets/Minecraft Menu Button Sound Effect  Sounffex.wav";
 	public const string CountdownPath = "res://Assets/Friday Night Funkin - 3, 2, 1, GO! - Sound Effect (HD).wav";
 	public const string CoinCollectPath = "res://Assets/Super Mario 64 - Gold Coin Sound Effect [Free Ringtone Download].wav";
+	public const string EndWhistlePath = "res://Assets/End of battle whistle SFX [MARIO KART 8 DELUXE].wav";
 	public const string MusicBusName = "Music";
 	public const string SfxBusName = "SFX";
 
@@ -205,6 +206,11 @@ public static class GameAudio
 	public static void PlayCountdown(Node context)
 	{
 		PlayOneShot(context, CountdownPath, -5f, 1.32f);
+	}
+
+	public static void PlayEndWhistle(Node context)
+	{
+		PlayOneShot(context, EndWhistlePath, -3.5f, 1f);
 	}
 
 	public static void PlayBoost(Node context)
