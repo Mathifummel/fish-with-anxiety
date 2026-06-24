@@ -36,9 +36,13 @@ public partial class PartyMode : Control
 	private Label timerLabel;
 	private Label scoreLabel;
 	private ProgressBar catchStressBar;
-	private ProgressBar p1BoostBar;
-	private ProgressBar p2BoostBar;
 	private StyleBoxFlat catchStressFillStyle;
+	private Label announcementLabel;
+	private Label announcementSubLabel;
+	private PanelContainer resultPanel;
+	private Label resultTitleLabel;
+	private Label resultDetailLabel;
+	private Label resultScoreLabel;
 	private Label statusLabel;
 	private Label leftHudLabel;
 	private Label rightHudLabel;
@@ -56,6 +60,10 @@ public partial class PartyMode : Control
 	private const float CatchArrowFullAlphaDistance = 1750f;
 	private const float CatchStressWarningStart = 34f;
 	private const float CatchStressWarningFullPressure = 96f;
+	private const float CatchCameraNearDistance = 640f;
+	private const float CatchCameraFarDistance = 2850f;
+	private const float CatchCameraMinZoom = 0.22f;
+	private const float CatchCameraMaxZoom = 0.78f;
 	private const float CatchLevelTwoTime = 18f;
 	private const float CatchLevelThreeTime = 36f;
 	private const float CatchLevelFourTime = 54f;
@@ -76,8 +84,9 @@ public partial class PartyMode : Control
 	private int p1RoundScore = 0;
 	private int p2RoundScore = 0;
 	private float roundTimer = 45f;
-	private float introTimer = 2.2f;
+	private float introTimer = 3.1f;
 	private float roundOverTimer = 3.2f;
+	private float announcementTimer = 0f;
 	private float catchStress = 0f;
 	private float catchElapsed = 0f;
 	private float catchEnemySpawnTimer = 0f;
@@ -86,8 +95,10 @@ public partial class PartyMode : Control
 	private float catchEnemySpeedMultiplier = 1.03f;
 	private float catchPassiveSpeedMultiplier = 1f;
 	private int catchLevel = 1;
+	private int lastRoundWinner = 0;
 	private bool catchStressAudioActive = false;
 	private string statusText = "";
+	private string lastRoundReason = "";
 
 	private PartyFish playerFish;
 	private PartyFish enemyFish;
@@ -129,6 +140,9 @@ public partial class PartyMode : Control
 	public override void _Process(double delta)
 	{
 		float dt = (float)delta;
+		if (announcementTimer > 0f)
+			announcementTimer -= dt;
+
 		UpdateCameras(dt);
 		UpdateCatchAssistArrow();
 		UpdateUi();
@@ -141,6 +155,7 @@ public partial class PartyMode : Control
 			{
 				state = RoundState.Playing;
 				statusText = GetPlayingHint();
+				ShowAnnouncement("LOS!", GetGameName(currentGame), 0.55f);
 			}
 			return;
 		}
@@ -267,35 +282,72 @@ public partial class PartyMode : Control
 
 	private void BuildOverlay()
 	{
+		ColorRect divider = new ColorRect();
+		divider.Color = new Color(0.72f, 0.96f, 1f, 0.36f);
+		divider.MouseFilter = MouseFilterEnum.Ignore;
+		divider.SetAnchorsPreset(LayoutPreset.Center);
+		divider.OffsetLeft = -1f;
+		divider.OffsetRight = 1f;
+		divider.OffsetTop = -10000f;
+		divider.OffsetBottom = 10000f;
+		AddChild(divider);
+
 		PanelContainer topPanel = new PanelContainer();
 		topPanel.SetAnchorsPreset(LayoutPreset.TopWide);
-		topPanel.OffsetLeft = 130f;
-		topPanel.OffsetTop = 16f;
-		topPanel.OffsetRight = -130f;
-		topPanel.OffsetBottom = 178f;
+		topPanel.OffsetLeft = 250f;
+		topPanel.OffsetTop = 14f;
+		topPanel.OffsetRight = -250f;
+		topPanel.OffsetBottom = 122f;
 		topPanel.MouseFilter = MouseFilterEnum.Ignore;
-		topPanel.AddThemeStyleboxOverride("panel", GameUi.CreatePanelStyle());
+		topPanel.AddThemeStyleboxOverride("panel", CreateTopPanelStyle());
 		AddChild(topPanel);
 
 		VBoxContainer topContent = new VBoxContainer();
 		topContent.Alignment = BoxContainer.AlignmentMode.Center;
-		topContent.AddThemeConstantOverride("separation", 4);
+		topContent.AddThemeConstantOverride("separation", 2);
 		topPanel.AddChild(topContent);
 
-		roundLabel = CreateLabel("", 24, GameUi.DarkText);
+		roundLabel = CreateLabel("", 21, GameUi.DarkText);
 		roundLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		topContent.AddChild(roundLabel);
 
-		timerLabel = CreateLabel("", 18, new Color(0.05f, 0.22f, 0.34f, 0.82f));
+		timerLabel = CreateLabel("", 17, new Color(0.05f, 0.22f, 0.34f, 0.82f));
 		timerLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		topContent.AddChild(timerLabel);
 
-		scoreLabel = CreateLabel("", 18, GameUi.DarkText);
+		scoreLabel = CreateLabel("", 15, GameUi.DarkText);
 		scoreLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		topContent.AddChild(scoreLabel);
 
 		catchStressBar = CreateStressBar();
-		topContent.AddChild(catchStressBar);
+		catchStressBar.SetAnchorsPreset(LayoutPreset.TopLeft);
+		catchStressBar.OffsetLeft = 18f;
+		catchStressBar.OffsetRight = 258f;
+		catchStressBar.OffsetTop = 132f;
+		catchStressBar.OffsetBottom = 150f;
+		AddChild(catchStressBar);
+
+		announcementLabel = CreateLabel("", 86, new Color(1f, 0.95f, 0.38f));
+		announcementLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		announcementLabel.VerticalAlignment = VerticalAlignment.Center;
+		announcementLabel.SetAnchorsPreset(LayoutPreset.Center);
+		announcementLabel.OffsetLeft = -360f;
+		announcementLabel.OffsetRight = 360f;
+		announcementLabel.OffsetTop = -160f;
+		announcementLabel.OffsetBottom = -42f;
+		announcementLabel.Visible = false;
+		AddChild(announcementLabel);
+
+		announcementSubLabel = CreateLabel("", 28, GameUi.LightText);
+		announcementSubLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		announcementSubLabel.VerticalAlignment = VerticalAlignment.Center;
+		announcementSubLabel.SetAnchorsPreset(LayoutPreset.Center);
+		announcementSubLabel.OffsetLeft = -380f;
+		announcementSubLabel.OffsetRight = 380f;
+		announcementSubLabel.OffsetTop = -48f;
+		announcementSubLabel.OffsetBottom = 12f;
+		announcementSubLabel.Visible = false;
+		AddChild(announcementSubLabel);
 
 		statusLabel = CreateLabel("", 16, GameUi.DarkText);
 		statusLabel.HorizontalAlignment = HorizontalAlignment.Center;
@@ -308,20 +360,6 @@ public partial class PartyMode : Control
 
 		leftHudLabel = CreateCornerLabel("Spieler 1  WASD + Leertaste", true);
 		rightHudLabel = CreateCornerLabel("Spieler 2  Pfeile + Enter", false);
-		p1BoostBar = CreateBoostBar(new Color(0.32f, 0.76f, 1f));
-		p1BoostBar.SetAnchorsPreset(LayoutPreset.BottomLeft);
-		p1BoostBar.OffsetLeft = 18f;
-		p1BoostBar.OffsetRight = 278f;
-		p1BoostBar.OffsetTop = -64f;
-		p1BoostBar.OffsetBottom = -46f;
-		p2BoostBar = CreateBoostBar(new Color(1f, 0.54f, 0.38f));
-		p2BoostBar.SetAnchorsPreset(LayoutPreset.BottomRight);
-		p2BoostBar.OffsetLeft = -278f;
-		p2BoostBar.OffsetRight = -18f;
-		p2BoostBar.OffsetTop = -64f;
-		p2BoostBar.OffsetBottom = -46f;
-		AddChild(p1BoostBar);
-		AddChild(p2BoostBar);
 		AddChild(leftHudLabel);
 		AddChild(rightHudLabel);
 
@@ -343,6 +381,9 @@ public partial class PartyMode : Control
 		Button menu = CreateButton("Hauptmenü");
 		menu.Pressed += () => SceneTransition.FadeToScene(GetTree(), "res://Scenes/MainMenu.tscn", 0.3f);
 		matchButtons.AddChild(menu);
+
+		resultPanel = CreateResultPanel();
+		AddChild(resultPanel);
 	}
 
 	private Label CreateCornerLabel(string text, bool left)
@@ -351,8 +392,8 @@ public partial class PartyMode : Control
 		label.SetAnchorsPreset(left ? LayoutPreset.BottomLeft : LayoutPreset.BottomRight);
 		label.OffsetLeft = left ? 18f : -330f;
 		label.OffsetRight = left ? 330f : -18f;
-		label.OffsetTop = -38f;
-		label.OffsetBottom = -12f;
+		label.OffsetTop = -44f;
+		label.OffsetBottom = -16f;
 		label.HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
 		return label;
 	}
@@ -375,6 +416,63 @@ public partial class PartyMode : Control
 		return button;
 	}
 
+	private StyleBoxFlat CreateTopPanelStyle()
+	{
+		StyleBoxFlat style = GameUi.CreatePanelStyle();
+		style.ContentMarginLeft = 18;
+		style.ContentMarginTop = 12;
+		style.ContentMarginRight = 18;
+		style.ContentMarginBottom = 12;
+		style.BgColor = new Color(1f, 1f, 1f, 0.30f);
+		style.ShadowSize = 14;
+		return style;
+	}
+
+	private PanelContainer CreateResultPanel()
+	{
+		PanelContainer panel = new PanelContainer();
+		panel.Visible = false;
+		panel.SetAnchorsPreset(LayoutPreset.Center);
+		panel.OffsetLeft = -360f;
+		panel.OffsetRight = 360f;
+		panel.OffsetTop = -152f;
+		panel.OffsetBottom = 112f;
+		panel.AddThemeStyleboxOverride("panel", CreateResultPanelStyle());
+
+		VBoxContainer layout = new VBoxContainer();
+		layout.Alignment = BoxContainer.AlignmentMode.Center;
+		layout.AddThemeConstantOverride("separation", 12);
+		panel.AddChild(layout);
+
+		resultTitleLabel = CreateLabel("", 38, GameUi.DarkText);
+		resultTitleLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		layout.AddChild(resultTitleLabel);
+
+		resultDetailLabel = CreateLabel("", 20, new Color(0.05f, 0.22f, 0.34f, 0.88f));
+		resultDetailLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		resultDetailLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		layout.AddChild(resultDetailLabel);
+
+		resultScoreLabel = CreateLabel("", 18, GameUi.DarkText);
+		resultScoreLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		layout.AddChild(resultScoreLabel);
+		return panel;
+	}
+
+	private StyleBoxFlat CreateResultPanelStyle()
+	{
+		StyleBoxFlat style = GameUi.CreatePanelStyle();
+		style.BgColor = new Color(1f, 1f, 1f, 0.58f);
+		style.BorderColor = new Color(0.82f, 0.98f, 1f, 0.88f);
+		style.ContentMarginLeft = 34;
+		style.ContentMarginTop = 28;
+		style.ContentMarginRight = 34;
+		style.ContentMarginBottom = 28;
+		style.ShadowColor = new Color(0f, 0.18f, 0.26f, 0.28f);
+		style.ShadowSize = 22;
+		return style;
+	}
+
 	private ProgressBar CreateStressBar()
 	{
 		ProgressBar bar = new ProgressBar();
@@ -382,8 +480,8 @@ public partial class PartyMode : Control
 		bar.MaxValue = 100f;
 		bar.Value = 0f;
 		bar.ShowPercentage = false;
-		bar.CustomMinimumSize = new Vector2(360f, 16f);
-		bar.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+		bar.CustomMinimumSize = new Vector2(220f, 17f);
+		bar.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 
 		StyleBoxFlat background = new StyleBoxFlat();
 		background.BgColor = new Color(0.04f, 0.09f, 0.13f, 0.78f);
@@ -409,45 +507,13 @@ public partial class PartyMode : Control
 		return bar;
 	}
 
-	private ProgressBar CreateBoostBar(Color fillColor)
-	{
-		ProgressBar bar = new ProgressBar();
-		bar.MinValue = 0f;
-		bar.MaxValue = 100f;
-		bar.Value = 100f;
-		bar.ShowPercentage = false;
-		bar.CustomMinimumSize = new Vector2(260f, 16f);
-
-		StyleBoxFlat background = new StyleBoxFlat();
-		background.BgColor = new Color(0.01f, 0.05f, 0.08f, 0.82f);
-		background.BorderColor = new Color(1f, 1f, 1f, 0.5f);
-		background.BorderWidthLeft = 1;
-		background.BorderWidthTop = 1;
-		background.BorderWidthRight = 1;
-		background.BorderWidthBottom = 1;
-		background.CornerRadiusTopLeft = 6;
-		background.CornerRadiusTopRight = 6;
-		background.CornerRadiusBottomLeft = 6;
-		background.CornerRadiusBottomRight = 6;
-
-		StyleBoxFlat fill = new StyleBoxFlat();
-		fill.BgColor = fillColor;
-		fill.CornerRadiusTopLeft = 5;
-		fill.CornerRadiusTopRight = 5;
-		fill.CornerRadiusBottomLeft = 5;
-		fill.CornerRadiusBottomRight = 5;
-
-		bar.AddThemeStyleboxOverride("background", background);
-		bar.AddThemeStyleboxOverride("fill", fill);
-		return bar;
-	}
-
 	private void RestartMatch()
 	{
 		p1MatchScore = 0;
 		p2MatchScore = 0;
 		roundIndex = 0;
 		matchButtons.Hide();
+		resultPanel?.Hide();
 		matchHintBar?.Hide();
 		StartNextRound();
 	}
@@ -466,9 +532,10 @@ public partial class PartyMode : Control
 			: gameOrder[(roundIndex - 1) % gameOrder.Length];
 		p1RoundScore = 0;
 		p2RoundScore = 0;
-		introTimer = 1.65f;
+		introTimer = 3.1f;
 		state = RoundState.Intro;
 		matchButtons.Hide();
+		resultPanel?.Hide();
 		matchHintBar?.Hide();
 		GameAudio.PlayCountdown(this);
 
@@ -810,14 +877,40 @@ public partial class PartyMode : Control
 
 	private void UpdateCameras(float dt)
 	{
-		Node2D leftTarget = GetLeftCameraTarget();
-		Node2D rightTarget = GetRightCameraTarget();
+		UpdateCamera(leftCamera, GetLeftCameraTarget(), GetRightCameraTarget(), true, dt);
+		UpdateCamera(rightCamera, GetRightCameraTarget(), GetLeftCameraTarget(), false, dt);
+	}
 
-		if (leftCamera != null && leftTarget != null)
-			leftCamera.GlobalPosition = leftTarget.GlobalPosition;
+	private void UpdateCamera(Camera2D camera, Node2D primaryTarget, Node2D secondaryTarget, bool preySide, float dt)
+	{
+		if (camera == null || primaryTarget == null)
+			return;
 
-		if (rightCamera != null && rightTarget != null)
-			rightCamera.GlobalPosition = rightTarget.GlobalPosition;
+		Vector2 targetPosition = primaryTarget.GlobalPosition;
+		float targetZoom = 0.72f;
+
+		if (currentGame == MiniGame.Catch &&
+			playerFish != null &&
+			enemyFish != null &&
+			!playerFish.IsEliminated &&
+			!enemyFish.IsEliminated)
+		{
+			Vector2 preyPosition = playerFish.GlobalPosition;
+			Vector2 hunterPosition = secondaryTarget?.GlobalPosition ?? enemyFish.GlobalPosition;
+			float distance = preyPosition.DistanceTo(hunterPosition);
+			float farFactor = Mathf.Clamp(
+				(distance - CatchCameraNearDistance) /
+				Mathf.Max(1f, CatchCameraFarDistance - CatchCameraNearDistance),
+				0f,
+				1f
+			);
+			Vector2 duelCenter = preyPosition.Lerp(hunterPosition, preySide ? 0.38f : 0.62f);
+			targetPosition = primaryTarget.GlobalPosition.Lerp(duelCenter, farFactor);
+			targetZoom = Mathf.Lerp(CatchCameraMaxZoom, CatchCameraMinZoom, farFactor);
+		}
+
+		camera.GlobalPosition = camera.GlobalPosition.Lerp(targetPosition, Mathf.Clamp(dt * 8f, 0f, 1f));
+		camera.Zoom = camera.Zoom.Lerp(new Vector2(targetZoom, targetZoom), Mathf.Clamp(dt * 5.5f, 0f, 1f));
 	}
 
 	private void UpdateCatchAssistArrow()
@@ -875,7 +968,7 @@ public partial class PartyMode : Control
 	private void UpdateUi()
 	{
 		string phaseText = state == RoundState.Intro
-			? $"Start in {Mathf.CeilToInt(Mathf.Max(0f, introTimer))}"
+			? $"Start in {Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(0f, introTimer - 0.1f)), 1, 3)}"
 			: state == RoundState.RoundOver
 				? $"Nächste Runde in {Mathf.CeilToInt(Mathf.Max(0f, roundOverTimer))}"
 				: state == RoundState.MatchOver
@@ -886,30 +979,119 @@ public partial class PartyMode : Control
 		timerLabel.Text = phaseText;
 		scoreLabel.Text = $"Party-Score  P1 {p1MatchScore} : {p2MatchScore} P2    Runde  {p1RoundScore} : {p2RoundScore}";
 		if (currentGame == MiniGame.Catch && state != RoundState.MatchOver)
-			scoreLabel.Text += $"    Level {catchLevel}    Stress {Mathf.CeilToInt(catchStress)}%";
+			scoreLabel.Text += $"    Level {catchLevel}";
 		statusLabel.Text = statusText;
 		catchStressBar.Visible = currentGame == MiniGame.Catch && state != RoundState.MatchOver;
 		catchStressBar.Value = catchStress;
 		UpdateCatchStressBarColor();
-		p1BoostBar.Value = GetBoostMeter(playerFish);
-		p2BoostBar.Value = GetBoostMeter(enemyFish);
+		UpdateAnnouncement();
+		UpdateResultPanel();
 
 		leftHudLabel.Text = currentGame == MiniGame.Cops
-			? "Spieler 1 Boost  |  kleines Team"
-			: "Spieler 1 Boost  |  kleiner Fisch";
+			? "Spieler 1  |  kleines Team"
+			: "Spieler 1  |  Beute";
 		rightHudLabel.Text = currentGame == MiniGame.Cops
-			? "Spieler 2 Boost  |  Gegnerfisch-Team"
+			? "Spieler 2  |  Gegnerfisch-Team"
 			: PartyState.Opponent == PartyState.OpponentSelection.Jellyfish
-				? "Spieler 2 Boost  |  Qualle"
-				: "Spieler 2 Boost  |  Gegnerfisch";
+				? "Spieler 2  |  Qualle"
+				: "Spieler 2  |  Gegnerfisch";
 	}
 
-	private float GetBoostMeter(PartyFish fish)
+	private void UpdateAnnouncement()
 	{
-		if (fish == null || fish.IsEliminated || state == RoundState.MatchOver)
-			return 0f;
+		if (announcementLabel == null || announcementSubLabel == null)
+			return;
 
-		return fish.BoostMeterValue;
+		if (state == RoundState.Intro)
+		{
+			int countdown = Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(0f, introTimer - 0.1f)), 1, 3);
+			announcementLabel.Text = countdown.ToString();
+			announcementSubLabel.Text = GetGameName(currentGame);
+			announcementLabel.Modulate = new Color(1f, 0.96f, 0.36f, 1f);
+			announcementSubLabel.Modulate = new Color(0.93f, 0.98f, 1f, 0.95f);
+			announcementLabel.Show();
+			announcementSubLabel.Show();
+			return;
+		}
+
+		if (announcementTimer > 0f)
+		{
+			float alpha = Mathf.Clamp(announcementTimer / 1.2f, 0f, 1f);
+			announcementLabel.Modulate = new Color(1f, 0.96f, 0.36f, alpha);
+			announcementSubLabel.Modulate = new Color(0.93f, 0.98f, 1f, alpha);
+			announcementLabel.Show();
+			announcementSubLabel.Show();
+			return;
+		}
+
+		announcementLabel.Hide();
+		announcementSubLabel.Hide();
+	}
+
+	private void ShowAnnouncement(string title, string subtitle, float duration)
+	{
+		if (announcementLabel == null || announcementSubLabel == null)
+			return;
+
+		announcementLabel.Text = title;
+		announcementSubLabel.Text = subtitle;
+		announcementTimer = duration;
+	}
+
+	private void UpdateResultPanel()
+	{
+		if (resultPanel == null)
+			return;
+
+		bool showResult = state == RoundState.RoundOver || state == RoundState.MatchOver;
+		resultPanel.Visible = showResult;
+		if (!showResult)
+			return;
+
+		if (state == RoundState.MatchOver)
+		{
+			if (p1MatchScore > p2MatchScore)
+				resultTitleLabel.Text = "Spieler 1 gewinnt";
+			else if (p2MatchScore > p1MatchScore)
+				resultTitleLabel.Text = "Spieler 2 gewinnt";
+			else
+				resultTitleLabel.Text = "Unentschieden";
+		}
+		else
+		{
+			resultTitleLabel.Text = lastRoundWinner switch
+			{
+				1 => "Spieler 1 punktet",
+				2 => "Spieler 2 punktet",
+				_ => "Unentschieden"
+			};
+		}
+
+		resultDetailLabel.Text = BuildResultDetail();
+		if (resultScoreLabel != null)
+			resultScoreLabel.Text = $"Score  {p1MatchScore} : {p2MatchScore}";
+	}
+
+	private string BuildResultDetail()
+	{
+		if (state == RoundState.MatchOver)
+		{
+			if (p1MatchScore > p2MatchScore)
+				return $"Die Beute gewinnt: {lastRoundReason}";
+
+			if (p2MatchScore > p1MatchScore)
+				return $"Der Jäger gewinnt: {lastRoundReason}";
+
+			return $"Beide bleiben gleichauf: {lastRoundReason}";
+		}
+
+		if (lastRoundWinner == 1)
+			return $"Beute gewinnt diese Runde: {lastRoundReason}";
+
+		if (lastRoundWinner == 2)
+			return $"Jäger gewinnt diese Runde: {lastRoundReason}";
+
+		return lastRoundReason;
 	}
 
 	private void UpdateCatchStressBarColor()
@@ -997,15 +1179,7 @@ public partial class PartyMode : Control
 		}
 
 		catchEnemyTooFarTimer += dt;
-		if (catchEnemyTooFarTimer < CatchEnemyTooFarGrace)
-		{
-			float remaining = Mathf.Ceil(CatchEnemyTooFarGrace - catchEnemyTooFarTimer);
-			statusText = $"Spieler 2 ist zu weit weg ({remaining:0}s).";
-			return;
-		}
-
-		enemyFish.Kill();
-		EndRound(1, "Spieler 2 war zu weit weg.");
+		statusText = "Spieler 2 ist weit weg - die Kamera zieht beide wieder ins Bild.";
 	}
 
 	private void UpdateCatchLevel()
@@ -1061,6 +1235,7 @@ public partial class PartyMode : Control
 
 		GameAudio.PlayLevelUp(this, catchLevel);
 		statusText = $"Level {catchLevel}: mehr Gegnerfische tauchen auf.";
+		ShowAnnouncement($"LEVEL {catchLevel}", "Mehr Gegnerfische tauchen auf", 1.55f);
 	}
 
 	private void ApplyCatchSpeedMultiplier(float enemyMultiplier, float passiveMultiplier)
@@ -1727,6 +1902,8 @@ public partial class PartyMode : Control
 
 		state = RoundState.RoundOver;
 		roundOverTimer = 3.2f;
+		lastRoundWinner = winner;
+		lastRoundReason = reason;
 
 		if (winner == 1)
 		{
@@ -1744,6 +1921,9 @@ public partial class PartyMode : Control
 		}
 
 		FreezeAllFish();
+
+		if (roundIndex >= totalRounds)
+			ShowMatchOver();
 	}
 
 	private void FreezeAllFish()
@@ -1772,6 +1952,7 @@ public partial class PartyMode : Control
 		ClearWorld();
 		DrawArena(true);
 		matchButtons.Show();
+		resultPanel?.Show();
 		ShowMatchHints();
 		GameUi.FocusFirstButton(matchButtons);
 
