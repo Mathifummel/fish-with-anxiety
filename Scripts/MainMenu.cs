@@ -12,6 +12,7 @@ public partial class MainMenu : Control
 	private const string PartySetupScenePath = "res://Scenes/PartySetup.tscn";
 	private const string ShopScenePath = "res://Scenes/Shop.tscn";
 	private const string MissionsScenePath = "res://Scenes/Missions.tscn";
+	private const string InfoScenePath = "res://Scenes/Info.tscn";
 
 	private const string BackgroundViewportPath = "Background/SubViewport";
 	private const string PanelLeftPath = "UI/PanelLeft";
@@ -27,6 +28,7 @@ public partial class MainMenu : Control
 	private const string GameLogoTexturePath = "res://Assets/Transparaentlogo.png";
 	private const string ShopIconTexturePath = "res://Assets/Generated/Buttons/shop_icon.png";
 	private const string MissionsIconTexturePath = "res://Assets/Generated/Buttons/missions_icon.png";
+	private const string InfoIconTexturePath = "res://Assets/infobutton.png";
 
 	private const float HoverScale = 1.05f;
 	private const float HoverTweenDuration = 0.14f;
@@ -41,6 +43,7 @@ public partial class MainMenu : Control
 	private Button multiplayerButton;
 	private Button shopIconButton;
 	private Button missionsIconButton;
+	private Button infoIconButton;
 	private TextureRect gameLogo;
 	private Panel controllerNoticePanel;
 	private TextureRect controllerNoticeImage;
@@ -133,6 +136,11 @@ public partial class MainMenu : Control
 	public void OpenMissions()
 	{
 		ChangeScene(MissionsScenePath);
+	}
+
+	public void OpenInfo()
+	{
+		ChangeScene(InfoScenePath);
 	}
 
 	public void OpenSettings()
@@ -349,22 +357,24 @@ public partial class MainMenu : Control
 		bar.OffsetLeft = -104f;
 		bar.OffsetTop = 30f;
 		bar.OffsetRight = -28f;
-		bar.OffsetBottom = 210f;
+		bar.OffsetBottom = 298f;
 		bar.Alignment = BoxContainer.AlignmentMode.Begin;
 		bar.AddThemeConstantOverride("separation", 12);
 		ui.AddChild(bar);
 
 		shopIconButton = CreateIconMenuButton("Shop", ShopIconTexturePath, OpenShop);
 		missionsIconButton = CreateIconMenuButton("Missionen", MissionsIconTexturePath, OpenMissions);
+		infoIconButton = CreateInfoMenuButton();
 		bar.AddChild(shopIconButton);
 		bar.AddChild(missionsIconButton);
+		bar.AddChild(infoIconButton);
 	}
 
 	private void ConfigureMainMenuFocusNavigation()
 	{
 		GameUi.ConfigureButtonNavigation(this);
 
-		if (shopIconButton == null || missionsIconButton == null)
+		if (shopIconButton == null || missionsIconButton == null || infoIconButton == null)
 			return;
 
 		List<Button> leftButtons = GetLeftMenuButtons();
@@ -383,15 +393,20 @@ public partial class MainMenu : Control
 			SetFocusNeighbor(current, Side.Right, shopIconButton);
 		}
 
-		SetFocusNeighbor(shopIconButton, Side.Top, missionsIconButton);
+		SetFocusNeighbor(shopIconButton, Side.Top, infoIconButton);
 		SetFocusNeighbor(shopIconButton, Side.Bottom, missionsIconButton);
 		SetFocusNeighbor(shopIconButton, Side.Left, leftButtons[0]);
 		SetFocusNeighbor(shopIconButton, Side.Right, leftButtons[0]);
 
 		SetFocusNeighbor(missionsIconButton, Side.Top, shopIconButton);
-		SetFocusNeighbor(missionsIconButton, Side.Bottom, shopIconButton);
+		SetFocusNeighbor(missionsIconButton, Side.Bottom, infoIconButton);
 		SetFocusNeighbor(missionsIconButton, Side.Left, leftButtons[0]);
 		SetFocusNeighbor(missionsIconButton, Side.Right, leftButtons[0]);
+
+		SetFocusNeighbor(infoIconButton, Side.Top, missionsIconButton);
+		SetFocusNeighbor(infoIconButton, Side.Bottom, shopIconButton);
+		SetFocusNeighbor(infoIconButton, Side.Left, leftButtons[0]);
+		SetFocusNeighbor(infoIconButton, Side.Right, leftButtons[0]);
 	}
 
 	private List<Button> GetLeftMenuButtons()
@@ -466,6 +481,68 @@ public partial class MainMenu : Control
 		button.Modulate = new Color(1f, 1f, 1f, 0.98f);
 		menuButtons.Add(button);
 		return button;
+	}
+
+	private Button CreateInfoMenuButton()
+	{
+		Button button = new Button();
+		button.Text = "";
+		button.TooltipText = "Info";
+		button.Icon = ResourceLoader.Load<Texture2D>(InfoIconTexturePath);
+		button.ExpandIcon = true;
+		button.IconAlignment = HorizontalAlignment.Center;
+		button.Alignment = HorizontalAlignment.Center;
+		button.CustomMinimumSize = new Vector2(76f, 76f);
+		button.FocusMode = FocusModeEnum.All;
+		ApplyInfoButtonStyle(button);
+		button.AddThemeFontOverride("font", GameUi.PixelFont);
+		button.AddThemeFontSizeOverride("font_size", 42);
+		button.AddThemeColorOverride("font_color", new Color(0.9f, 0.99f, 1f));
+		button.AddThemeColorOverride("font_hover_color", Colors.White);
+		button.AddThemeColorOverride("font_pressed_color", new Color(1f, 0.94f, 0.62f));
+		button.AddThemeColorOverride("font_focus_color", Colors.White);
+		button.Pressed += () => GameAudio.PlayOneShot(
+			this,
+			GameAudio.UiButtonPath,
+			-8f,
+			(float)GD.RandRange(0.96f, 1.04f)
+		);
+		button.Pressed += OpenInfo;
+		button.MouseEntered += () => AnimateButton(button, true);
+		button.MouseExited += () => AnimateButton(button, false);
+		button.Scale = Vector2.One;
+		button.Modulate = new Color(1f, 1f, 1f, 0.98f);
+		menuButtons.Add(button);
+		return button;
+	}
+
+	private void ApplyInfoButtonStyle(Button button)
+	{
+		button.AddThemeStyleboxOverride("normal", CreateInfoButtonStyle(0f, 0.22f));
+		button.AddThemeStyleboxOverride("hover", CreateInfoButtonStyle(0.22f, 0.68f));
+		button.AddThemeStyleboxOverride("pressed", CreateInfoButtonStyle(0.34f, 0.86f));
+		button.AddThemeStyleboxOverride("focus", CreateInfoButtonStyle(0.28f, 0.95f));
+		button.AddThemeConstantOverride("h_separation", 0);
+	}
+
+	private StyleBoxFlat CreateInfoButtonStyle(float backgroundAlpha, float borderAlpha)
+	{
+		StyleBoxFlat style = new StyleBoxFlat();
+		style.BgColor = new Color(0.02f, 0.18f, 0.24f, backgroundAlpha);
+		style.BorderColor = new Color(0.72f, 0.96f, 1f, borderAlpha);
+		style.BorderWidthLeft = 2;
+		style.BorderWidthTop = 2;
+		style.BorderWidthRight = 2;
+		style.BorderWidthBottom = 2;
+		style.CornerRadiusTopLeft = 8;
+		style.CornerRadiusTopRight = 8;
+		style.CornerRadiusBottomLeft = 8;
+		style.CornerRadiusBottomRight = 8;
+		style.ContentMarginLeft = 2;
+		style.ContentMarginTop = 2;
+		style.ContentMarginRight = 2;
+		style.ContentMarginBottom = 2;
+		return style;
 	}
 
 	private void ApplyIconButtonStyle(Button button)
